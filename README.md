@@ -13,7 +13,38 @@ AlexScript (which is a misnomer; the language will soon be renamed
 since it's not actually a scripting language) is a programming
 language designed to have a functional feel and very high-level
 ergonomics while maintaining speed using strictly-controlled,
-deterministic memory management.
+deterministic memory management. The language is capable of compiling
+to C (and possibly other languages in the future), allowing for
+maximum portability without having to write a new backend for the
+compiler for every possible target; also, the compiler and tooling
+will eventually be rewritten in AlexScript to allow for maximum
+portability.
+
+## Example
+
+```
+// Calculates the nth fibonacci number.
+def fibonacci (0: U32) : U32 = 0
+  | fibonacci 1 = 1
+  | fibonacci n = fibonacci (n - 2) + fibonacci (n - 1);
+
+// Prompts the user for a number n, and prints the Fibonacci numbers up
+// to n.
+def fibPrompt
+  = do {
+    print "Enter a number: ";
+    num <- read <$> getLine;
+    sequence_ (print . fibonacci <$> [0 .. num]);
+  };
+
+// Program entry point.
+def main: IO ()
+  = fibPrompt;
+```
+
+Note that type annotations are always optional; here they're given for
+`fibonacci` and `main` for illustrative purposes, but omitted for
+`fibPrompt` (for which the compiler infers the return type `IO ()`).
 
 ## Tools
 
@@ -71,6 +102,24 @@ Some features the language will most likely have:
     can be converted to an `IO` computation using
     `UNSAFE_assertMemorySafe : MemoryUnsafe a -> IO a`.
   - Further safety monads may be added in the future.
--
+- The language achieves good performance by guaranteeing a number of
+  optimizations:
+  - Since the language uses a linear type system, garbage collection
+    is not done; instead, values are stored on the stack unless
+    explicitly declared to be on the heap, and heap-stored values are
+    cleaned up at deterministic points as calculated at compile time.
+  - Functions of type `Fn t -> t` are optimized into functions that
+    operate on pointers to `t`, i.e., notionally, `Fn (*mut t) -> ()`,
+    where `*mut t` is a mutable pointer to a type `t`.
+  - Types that contain an optional, non-null pointer like `Option (Box
+    a)`, `Option (Ref a)`, etc., are optimized into nullable pointers.
+  - Since the language has no loops, the compiler guarantees
+    optimization of tail-call recursion to loops on all functions, as
+    is standard in functional languages.
 
 ## Compilation
+
+When invoked with no flags, AlexScript by default compiles source code
+directly to code that is valid C and C++, then calls the system C
+compiler to generate an object file, then calls the system linker to
+generate an executable file.
