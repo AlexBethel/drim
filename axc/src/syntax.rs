@@ -5,14 +5,16 @@ use num_bigint::BigUint;
 /// A concrete syntax tree. This represents the full content of an AlexScript program, including all
 /// whitespace, comments, and tokens: the source code of the original program can be recovered
 /// completely using the syntax tree.
-pub struct SyntaxTree {}
+#[derive(Clone)]
+pub struct SyntaxTree(pub Vec<Statement>);
 
 /// Top-level statements, making up the overall program.
+#[derive(Clone)]
 pub enum Statement {
     /// Declaration of an abstract data type.
     TypeDefinition {
         /// The type being defined. This is only allowed to be `Named` or `Application`.
-        left: Type,
+        typ: Type,
 
         /// The possible constructors of the data type.
         constructors: Vec<TypeConstructor>,
@@ -28,20 +30,34 @@ pub enum Statement {
 
         /// The list of declarations that dictate the type's behavior when treated as an instance of
         /// the type class.
-        decls: Vec<ClassDeclaration>,
+        decls: Vec<ClassMember>,
+    },
+
+    /// Declaration of a type class.
+    ClassDefinition {
+        /// The name of the class.
+        name: String,
+
+        /// The type variable representing a type conforming to the class.
+        var: String,
+
+        /// The list of declarations (optionally filled-in) that are necessary for a type to conform
+        /// to the type class.
+        decls: Vec<ClassMember>,
     },
 
     /// Other declarations.
-    ClassDeclaration(ClassDeclaration),
+    ClassMember(ClassMember),
 }
 
 /// Top-level statements that are also allowed to occur within a type class definition, and which
 /// therefore have an optional rather than strictly-required right-hand side, e.g., `type X;` rather
 /// than `type X = Y;`.
-pub enum ClassDeclaration {
+#[derive(Clone)]
+pub enum ClassMember {
     /// Declaration of a function or constant.
     Function {
-        /// Name of the function and its arguments.
+        /// Name of the function.
         name: String,
 
         /// The function arguments.
@@ -59,22 +75,10 @@ pub enum ClassDeclaration {
         /// The target type.
         right: Option<Type>,
     },
-
-    /// Declaration of a type class.
-    ClassDefinition {
-        /// The name of the class.
-        name: String,
-
-        /// The type variable representing a type conforming to the class.
-        var: String,
-
-        /// The list of declarations (optionally filled-in) that are necessary for a type to conform
-        /// to the type class.
-        decls: Vec<ClassDeclaration>,
-    },
 }
 
 /// A possible constructor for an abstract data type.
+#[derive(Clone)]
 pub struct TypeConstructor {
     /// The name of the constructor.
     pub name: String,
@@ -84,6 +88,7 @@ pub struct TypeConstructor {
 }
 
 /// Expressions.
+#[derive(Clone)]
 pub enum Expr {
     /// Unary operators, e.g., `-5`.
     UnaryOp {
@@ -179,6 +184,7 @@ pub enum Expr {
 }
 
 /// Type names.
+#[derive(Clone)]
 pub enum Type {
     /// `Foo`
     Named(String),
@@ -202,6 +208,7 @@ pub enum Type {
 
 /// Patterns for use in function arguments, lambda arguments, `let` statements, and `match`
 /// statements.
+#[derive(Clone)]
 pub enum Pattern {
     /// `(a, b)`
     Tuple(Vec<Pattern>),
@@ -232,6 +239,7 @@ pub enum Pattern {
 }
 
 /// Record syntax blocks, e.g., "{a: b, c: d, ...}".
+#[derive(Clone)]
 pub struct Record {
     /// The named members of the record, in order of occurrence.
     pub members: Vec<(String, Expr)>,
@@ -241,6 +249,7 @@ pub struct Record {
 }
 
 /// Literal values included in source code.
+#[derive(Clone)]
 pub enum Literal {
     /// `"hello"`
     String(String),
