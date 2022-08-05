@@ -1,7 +1,7 @@
 //! Conversion of AST to intermediate representation.
 
 use crate::ir::IR;
-use crate::SyntaxTree;
+use crate::syntax::SyntaxTree;
 
 /// Compiles an abstract syntax tree into intermediate representation; this assumes the code already
 /// type-checks, and emits unoptimized IR.

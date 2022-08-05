@@ -2,7 +2,7 @@
 
 use std::{error::Error, fmt::Display};
 
-use crate::SyntaxTree;
+use crate::syntax::SyntaxTree;
 
 /// A compile-time type error from the user's source code.
 #[derive(Debug)]
