@@ -34,7 +34,7 @@ def fibPrompt
   = do {
     print "Enter a number: ";
     num <- read <$> getLine;
-    sequence_ (print . fibonacci <$> [0 .. num]);
+    sequence_ (print . fibonacci <$> (0 .. num));
   };
 
 // Program entry point.

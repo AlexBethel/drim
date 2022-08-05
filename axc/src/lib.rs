@@ -2,6 +2,14 @@
 //!
 //! AlexScript is a based programming language, for based people.
 
+#![deny(missing_docs)]
+
+pub mod ast2ir;
+pub mod ir;
+pub mod parser;
+pub mod typeck;
+pub mod backends;
+
 use num_bigint::BigUint;
 
 /// A concrete syntax tree. This represents the full content of an AlexScript program, including all
@@ -88,46 +96,70 @@ pub struct TypeConstructor {
 /// Expressions.
 pub enum Expr {
     /// Unary operators, e.g., `-5`.
-    UnaryOp { kind: String, val: Box<Expr> },
+    UnaryOp {
+        /// The text of the operator.
+        kind: String,
+
+        /// The value being operated upon.
+        val: Box<Expr>,
+    },
 
     /// Binary operators, e.g., `5 + 5`.
     BinaryOp {
+        /// The text of the operator.
         kind: String,
+
+        /// The left side of the operator.
         left: Box<Expr>,
+
+        /// The right side of the operator.
         right: Box<Expr>,
     },
 
     /// Function application, e.g., `sin x`.
     Application {
+        /// The function being applied. For curried functions with multiple arguments (e.g., `atan2
+        /// y x`), this is another expression of type `Application`.
         func: Box<Expr>,
+
+        /// The argument to which the function is being applied.
         argument: Box<Expr>,
     },
 
     /// Defining of temporary variables, e.g., `let x = 5 in x + x`.
-    Let { left: Pattern, right: Box<Expr> },
+    Let {
+        /// The pattern being bound.
+        left: Pattern,
+
+        /// The variable the pattern is matching.
+        right: Box<Expr>,
+
+        /// The expression the pattern is being substituted into.
+        into: Box<Expr>,
+    },
 
     /// Matching of multiple cases, e.g., `match x { 5 => 'a', 6 => 'b' }`.
     Match {
+        /// The expression being matched upon.
         matcher: Box<Expr>,
+
+        /// The possible cases of the `match` expression.
         cases: Vec<(Pattern, Expr)>,
     },
 
-    /// Syntax sugar for matching on booleans, e.g., `if foo then bar else baz`.
-    If {
-        subject: Box<Expr>,
-        iftrue: Box<Expr>,
-        iffalse: Box<Expr>,
-    },
-
-    /// Struct initialization, e.g., `Vector { pointer: xyz, length: 12 }`.
-    StructInit {
-        name: String,
+    /// Record initialization, e.g., `{ pointer: xyz, length: 12 }`.
+    Record {
+        /// The elements of the record.
         elements: Vec<(String, Expr)>,
     },
 
     /// Anonymous functions, e.g., `fn x -> x + 1`.
     Lambda {
+        /// Arguments to the lambda; multiple of these are equivalent to stacking lambdas by
+        /// currying.
         arguments: Vec<Pattern>,
+
+        /// The result of the lambda.
         result: Box<Expr>,
     },
 
@@ -135,11 +167,20 @@ pub enum Expr {
     VariableReference(Vec<String>),
 
     /// Dot subscripts, e.g., `foo.bar`.
-    DotSubscript { value: Box<Expr>, subscript: String },
+    DotSubscript {
+        /// The left side of the subscript.
+        value: Box<Expr>,
+
+        /// The right side of the subscript; this is only allowed to be a single word.
+        subscript: String,
+    },
 
     /// Bracket subscripts, e.g., `foo[bar]`.
     BracketSubscript {
+        /// The left side of the subscript.
         value: Box<Expr>,
+
+        /// The right side of the subscript.
         subscript: Box<Expr>,
     },
 
@@ -154,8 +195,11 @@ pub enum Type {
 
     /// `List Int`
     Application {
-        // TODO: is this right?
-        function: Box<Expr>,
+        /// The function being applied. This must be a generic type.
+        function: Box<Type>,
+
+        /// The expression given as an argument to the type. This can be any expression, to allow
+        /// const generics; in most cases, though, it should be just a normal type.
         expression: Box<Expr>,
     },
 
@@ -174,9 +218,11 @@ pub enum Pattern {
 
     /// `a: String`
     TypeAnnotated {
+        /// The pattern being annotated.
         pat: Box<Pattern>,
-        // Note that types are expressions, to simplify parsing.
-        typ: Box<Expr>,
+
+        /// The type that `pat` is being asserted to have.
+        typ: Box<Type>,
     },
 
     /// `Foo`
