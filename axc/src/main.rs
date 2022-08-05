@@ -258,10 +258,26 @@ fn main() {
         typeck(&ast)?;
 
         let ir = ast2ir(ast);
-        let c = backends::c::generate_c(&ir);
 
-        let mut out_file = File::create("out.c")?;
-        write!(out_file, "{}", c)?;
+        match args.target {
+            Target::CSource => {
+                let c = backends::c::generate_c(&ir);
+
+                let mut out_file = File::create("out.c")?;
+                write!(out_file, "{}", c)?;
+            }
+            Target::Assembly => todo!(),
+            Target::ObjectFile => todo!(),
+            Target::Executable => todo!(),
+            Target::SharedObject => todo!(),
+            Target::Spirv => todo!(),
+            Target::Wat => todo!(),
+            Target::Wasm => todo!(),
+            Target::Lua => todo!(),
+            Target::Python => todo!(),
+            Target::Go => todo!(),
+            Target::Ada => todo!(),
+        }
 
         Ok(())
     }
