@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display, fs::File, io::Write, process::exit, str::F
 use axc::{
     ast2ir::ast2ir,
     backends,
-    parser::{parser, ParserError},
+    parser::{parser, ParserError, ParserMeta},
     typeck::typeck,
 };
 use clap::Parser;
@@ -254,7 +254,8 @@ fn main() {
         let args = Args::parse();
 
         let source = std::fs::read_to_string(&args.source_file)?;
-        let ast = chumsky::Parser::parse(&parser(), source).map_err(ParserError)?;
+        let meta = ParserMeta::default();
+        let ast = chumsky::Parser::parse(&parser(&meta), source).map_err(ParserError)?;
         typeck(&ast)?;
 
         let ir = ast2ir(ast);
