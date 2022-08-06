@@ -5,11 +5,11 @@ use num_bigint::BigUint;
 /// A concrete syntax tree. This represents the full content of an AlexScript program, including all
 /// whitespace, comments, and tokens: the source code of the original program can be recovered
 /// completely using the syntax tree.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SyntaxTree(pub Vec<Statement>);
 
 /// Top-level statements, making up the overall program.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     /// Declaration of an abstract data type.
     TypeDefinition {
@@ -53,7 +53,7 @@ pub enum Statement {
 /// Top-level statements that are also allowed to occur within a type class definition, and which
 /// therefore have an optional rather than strictly-required right-hand side, e.g., `type X;` rather
 /// than `type X = Y;`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ClassMember {
     /// Declaration of a function or constant.
     Function {
@@ -78,7 +78,7 @@ pub enum ClassMember {
 }
 
 /// A possible constructor for an abstract data type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypeConstructor {
     /// The name of the constructor.
     pub name: String,
@@ -88,7 +88,7 @@ pub struct TypeConstructor {
 }
 
 /// Expressions.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Expr {
     /// Unary operators, e.g., `-5`.
     UnaryOp {
@@ -184,7 +184,7 @@ pub enum Expr {
 }
 
 /// Type names.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Type {
     /// `Foo`
     Named(String),
@@ -208,7 +208,7 @@ pub enum Type {
 
 /// Patterns for use in function arguments, lambda arguments, `let` statements, and `match`
 /// statements.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Pattern {
     /// `(a, b)`
     Tuple(Vec<Pattern>),
@@ -239,7 +239,7 @@ pub enum Pattern {
 }
 
 /// Record syntax blocks, e.g., "{a: b, c: d, ...}".
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Record {
     /// The named members of the record, in order of occurrence.
     pub members: Vec<(String, Expr)>,
@@ -249,7 +249,7 @@ pub struct Record {
 }
 
 /// Literal values included in source code.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Literal {
     /// `"hello"`
     String(String),

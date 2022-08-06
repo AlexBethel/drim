@@ -3,12 +3,14 @@
 use std::{error::Error, fmt::Display};
 
 use chumsky::{
-    prelude::{choice, end, just, todo, Simple},
-    text::{ident, keyword},
+    prelude::{choice, end, just, one_of, todo, Simple},
+    text::{ident, keyword, whitespace},
     Parser,
 };
 
-use crate::syntax::{ClassMember, Expr, Pattern, Statement, SyntaxTree, Type, TypeConstructor};
+use crate::syntax::{
+    ClassMember, Expr, Literal, Pattern, Statement, SyntaxTree, Type, TypeConstructor,
+};
 
 /// Adapter to make `chumsky`'s parser errors usable as standard Rust errors.
 #[derive(Debug)]
@@ -50,6 +52,7 @@ struct OperatorDef {
 }
 
 /// The possible associativity directions of an operator.
+#[derive(PartialEq, Eq, Clone, Copy)]
 enum Associativity {
     Left,
     Right,
@@ -210,14 +213,24 @@ impl Default for ParserMeta {
 }
 
 /// Parser for AlexScript code.
-pub fn parser(m: &ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> {
-    parse_statement(m)
+pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> + 'a {
+    // parse_statement(m)
+    //     .repeated()
+    //     .map(SyntaxTree)
+    //     .then_ignore(end())
+    parse_expression(m)
+        .then_ignore(just(";").then(whitespace()))
         .repeated()
-        .map(SyntaxTree)
         .then_ignore(end())
+        .map(|exprs| {
+            println!("{:#?}", exprs);
+            todo!()
+        })
 }
 
-fn parse_statement(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
+fn parse_statement<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     choice((
         parse_type_def(m),
         parse_instance_def(m),
@@ -229,9 +242,9 @@ fn parse_statement(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simpl
 fn parse_type_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
     keyword("data")
         .ignore_then(parse_type(m))
-        .then_ignore(just('='))
+        .then_ignore(just('=').then(whitespace()))
         .then(parse_constructor(m).repeated())
-        .then_ignore(just(';'))
+        .then_ignore(just(';').then(whitespace()))
         .map(|(typ, constructors)| Statement::TypeDefinition { typ, constructors })
 }
 
@@ -241,14 +254,16 @@ fn parse_constructor(m: &ParserMeta) -> impl Parser<char, TypeConstructor, Error
         .map(|(name, args)| TypeConstructor { name, args })
 }
 
-fn parse_instance_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
+fn parse_instance_def<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     keyword("instance")
         .ignore_then(ident())
         .then(parse_type(m))
         .then(
             parse_class_member(m)
                 .repeated()
-                .delimited_by(just('{'), just('}')),
+                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
         )
         .map(|((classname, typ), decls)| Statement::InstanceDefinition {
             class_name: classname,
@@ -257,20 +272,31 @@ fn parse_instance_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Si
         })
 }
 
-fn parse_class_decl_stmt(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
+fn parse_class_decl_stmt<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     parse_class_member(m).map(Statement::ClassMember)
 }
 
-fn parse_class_member(m: &ParserMeta) -> impl Parser<char, ClassMember, Error = Simple<char>> {
+fn parse_class_member<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, ClassMember, Error = Simple<char>> + 'a {
     choice((parse_func_decl(m), parse_type_alias(m)))
 }
 
-fn parse_func_decl(m: &ParserMeta) -> impl Parser<char, ClassMember, Error = Simple<char>> {
+fn parse_func_decl<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, ClassMember, Error = Simple<char>> + 'a {
     keyword("def")
         .ignore_then(ident())
         .then(parse_pattern(m).repeated())
-        .then(just('=').ignore_then(parse_expression(m)).or_not())
-        .then_ignore(just(';'))
+        .then(
+            just('=')
+                .then(whitespace())
+                .ignore_then(parse_expression(m))
+                .or_not(),
+        )
+        .then_ignore(just(';').then(whitespace()))
         .map(|((name, arguments), definition)| ClassMember::Function {
             name,
             arguments,
@@ -281,31 +307,146 @@ fn parse_func_decl(m: &ParserMeta) -> impl Parser<char, ClassMember, Error = Sim
 fn parse_type_alias(m: &ParserMeta) -> impl Parser<char, ClassMember, Error = Simple<char>> {
     keyword("type")
         .ignore_then(parse_type(m))
-        .then(just('=').ignore_then(parse_type(m)).or_not())
-        .then_ignore(just(';'))
+        .then(
+            just('=')
+                .then(whitespace())
+                .ignore_then(parse_type(m))
+                .or_not(),
+        )
+        .then_ignore(just(';').then(whitespace()))
         .map(|(left, right)| ClassMember::TypeAlias { left, right })
 }
 
-fn parse_class_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
+fn parse_class_def<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     keyword("class")
         .ignore_then(ident())
         .then(ident())
         .then(
             parse_class_member(m)
                 .repeated()
-                .delimited_by(just('{'), just('}')),
+                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
         )
         .map(|((name, var), decls)| Statement::ClassDefinition { name, var, decls })
 }
 
-fn parse_expression(m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> {
+fn parse_expression<'a>(m: &'a ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + 'a {
+    (0..=10)
+        .rev()
+        .fold(parse_unary(m, parse_literal(m)).boxed(), |p, precedence| {
+            parse_binary(m, precedence, p).boxed()
+        })
+}
+
+fn parse_unary(
+    _m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    choice((just("-").to("-"), just("+").to("+")))
+        .then_ignore(whitespace())
+        .repeated()
+        .then(base.clone())
+        .map(|(ops, exp)| {
+            ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
+                kind: op.to_string(),
+                val: Box::new(exp),
+            })
+        })
+}
+
+fn parse_binary<'a>(
+    m: &'a ParserMeta,
+    prec: u32,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone + 'a,
+) -> impl Parser<char, Expr, Error = Simple<char>> + 'a + Clone {
+    let op_defs = m.operators.iter().filter(|def| def.precedence == prec);
+    let op_parsers = op_defs.map(|def| {
+        just(def.name.to_string())
+            .then(whitespace())
+            .ignore_then(base.clone())
+            .map(|e| (&def.name, &def.assoc, e))
+    });
+
+    let zero = one_of([]).map(|_| unreachable!()).boxed();
+    let any_op = op_parsers.fold(zero, |l, r| l.or(r).boxed());
+    let ops = any_op.repeated();
+
+    base.then(ops).map(|(first, others)| {
+        let mut assocs = others.iter().map(|(_, assoc, _)| assoc);
+        let first_assoc = assocs.next();
+        if !first_assoc.map_or(true, |first| assocs.all(|a| a == first)) {
+            // TODO: Crash the parser properly here, with error recovery etc.
+            panic!("Precedence parsing error: conflicting associativities");
+        }
+
+        let all_assoc = first_assoc.map(|o| **o).flatten();
+
+        if all_assoc == None && others.len() >= 2 {
+            panic!("Precedence parsing error: non-associative operation applied associatively");
+        }
+
+        match all_assoc {
+            None | Some(Associativity::Left) => {
+                others
+                    .into_iter()
+                    .fold(first, |left, (op_name, _assoc, right)| Expr::BinaryOp {
+                        kind: op_name.to_owned(),
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    })
+            }
+            Some(Associativity::Right) => {
+                // Right now we have:
+                // a ^ b X c ^ d
+                // | \-/ \-/ \-/
+                // |  \---+---/
+                // .      |
+                // first  .
+                //     others
+
+                // To parse right-associatively, we need:
+                // a ^ b X c ^ d
+                // \-/ \-/ \-/ |
+                //  \---+---/  |
+                //      |      |
+                //      .    last
+                //   others_l
+                let others_l = std::iter::once(&first)
+                    .chain(others.iter().map(|(_name, _assoc, expr)| expr))
+                    .zip(others.iter().map(|(name, _assoc, _expr)| name))
+                    .collect::<Vec<_>>();
+                let last = others
+                    .iter()
+                    .last()
+                    .map(|(_name, _assoc, expr)| expr)
+                    .unwrap_or(&first);
+
+                // And then we can fold as with left-associative operators.
+                others_l
+                    .into_iter()
+                    .rev()
+                    .fold(last.to_owned(), |r, (l, op)| Expr::BinaryOp {
+                        kind: op.to_string(),
+                        left: Box::new(l.to_owned()),
+                        right: Box::new(r),
+                    })
+            }
+        }
+    })
+}
+
+fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    // TODO: add all the literals.
+    chumsky::text::int(10)
+        .then_ignore(whitespace())
+        .map(|s: String| Expr::Literal(Literal::Integer(s.parse().unwrap())))
+}
+
+fn parse_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
     todo()
 }
 
-fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
-    todo()
-}
-
-fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+fn parse_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
     todo()
 }
