@@ -143,10 +143,7 @@ pub enum Expr {
     },
 
     /// Record initialization, e.g., `{ pointer: xyz, length: 12 }`.
-    Record {
-        /// The elements of the record.
-        elements: Vec<(String, Expr)>,
-    },
+    Record(Vec<(String, Expr)>),
 
     /// Anonymous functions, e.g., `fn x -> x + 1`.
     Lambda {
@@ -158,16 +155,13 @@ pub enum Expr {
         result: Box<Expr>,
     },
 
-    /// Variable references, possibly namespaced, e.g., `foo::bar::baz`.
-    VariableReference(Vec<String>),
-
     /// Dot subscripts, e.g., `foo.bar`.
     DotSubscript {
         /// The left side of the subscript.
         value: Box<Expr>,
 
-        /// The right side of the subscript; this is only allowed to be a single word.
-        subscript: String,
+        /// The right side of the subscript; semantically, this is only allowed to be a single word.
+        subscript: Box<Expr>,
     },
 
     /// Bracket subscripts, e.g., `foo[bar]`.
@@ -178,6 +172,9 @@ pub enum Expr {
         /// The right side of the subscript.
         subscript: Box<Expr>,
     },
+
+    /// Variable references, possibly namespaced, e.g., `foo::bar::baz`.
+    VariableReference(Vec<String>),
 
     /// Literal tokens, e.g., strings and numbers.
     Literal(Literal),

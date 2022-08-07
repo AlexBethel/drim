@@ -3,7 +3,7 @@
 use std::{error::Error, fmt::Display};
 
 use chumsky::{
-    prelude::{choice, end, just, none_of, one_of, Simple},
+    prelude::{choice, end, just, none_of, one_of, todo, Simple},
     recursive::recursive,
     text::{ident, int, keyword, whitespace},
     Parser,
@@ -331,11 +331,22 @@ fn parse_class_def<'a>(
 }
 
 fn parse_expression<'a>(m: &'a ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + 'a {
-    (0..=10)
-        .rev()
-        .fold(parse_unary(m, parse_literal(m)).boxed(), |p, precedence| {
+    recursive(|full_expr| {
+        let lambda = parse_lambda_expr(m, full_expr.clone());
+        let record = parse_record_expr(m, full_expr.clone());
+
+        let base = choice((parse_literal(m), parse_var_ref_expr(m)));
+        let subscript = parse_subscript_expr(m, base);
+        let term = choice((lambda, record, subscript));
+
+        let unary = parse_unary(m, term);
+
+        let binary = (0..=10).rev().fold(unary.boxed(), |p, precedence| {
             parse_binary(m, precedence, p).boxed()
-        })
+        });
+
+        binary
+    })
 }
 
 fn parse_unary(
@@ -433,6 +444,79 @@ fn parse_binary<'a>(
             }
         }
     })
+}
+
+fn parse_record_expr(
+    _m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    ident()
+        .then_ignore(whitespace())
+        .then_ignore(just(':'))
+        .then_ignore(whitespace())
+        .then(base)
+        .separated_by(just(',').then(whitespace()))
+        .allow_trailing()
+        .delimited_by(just('{').then(whitespace()), just('}').then(whitespace()))
+        .map(Expr::Record)
+}
+
+fn parse_lambda_expr(
+    m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    keyword("fn")
+        .then(whitespace())
+        .ignore_then(parse_pattern(m).repeated())
+        .then_ignore(just("->").then(whitespace()))
+        .then(base)
+        .map(|(arguments, result)| Expr::Lambda {
+            arguments,
+            result: Box::new(result),
+        })
+}
+
+fn parse_subscript_expr(
+    _m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    enum SubscriptKind {
+        Dot,
+        Bracket,
+    }
+
+    base.clone()
+        .then(
+            choice((
+                just('.')
+                    .ignore_then(whitespace())
+                    .ignore_then(base.clone())
+                    .map(|e| (SubscriptKind::Dot, e)),
+                base.clone()
+                    .delimited_by(just('[').then(whitespace()), just(']').then(whitespace()))
+                    .map(|e| (SubscriptKind::Bracket, e)),
+            ))
+            .repeated(),
+        )
+        .map(|(l, subscripts): (Expr, Vec<(SubscriptKind, Expr)>)| {
+            subscripts.into_iter().fold(l, |l, (kind, r)| match kind {
+                SubscriptKind::Dot => Expr::DotSubscript {
+                    value: Box::new(l),
+                    subscript: Box::new(r),
+                },
+                SubscriptKind::Bracket => Expr::BracketSubscript {
+                    value: Box::new(l),
+                    subscript: Box::new(r),
+                },
+            })
+        })
+}
+
+fn parse_var_ref_expr(m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    ident()
+        .then_ignore(whitespace())
+        .separated_by(just("::").then(whitespace()))
+        .map(Expr::VariableReference)
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
@@ -540,7 +624,7 @@ fn parse_record_type(
         .map(Type::Record)
 }
 
-fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> + Clone {
     recursive(|rec| {
         choice((
             parse_ignore_pattern(m),
