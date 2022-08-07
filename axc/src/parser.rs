@@ -214,13 +214,9 @@ impl Default for ParserMeta {
 
 /// Parser for AlexScript code.
 pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> + 'a {
-    // parse_statement(m)
-    //     .repeated()
-    //     .map(SyntaxTree)
-    //     .then_ignore(end())
-    parse_expression(m)
-        .then_ignore(just(";").then(whitespace()))
+    parse_statement(m)
         .repeated()
+        .map(SyntaxTree)
         .then_ignore(end())
         .map(|exprs| {
             println!("{:#?}", exprs);
@@ -288,7 +284,8 @@ fn parse_func_decl<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, ClassMember, Error = Simple<char>> + 'a {
     keyword("def")
-        .ignore_then(ident())
+        .then_ignore(whitespace())
+        .ignore_then(ident().then_ignore(whitespace()))
         .then(parse_pattern(m).repeated())
         .then(
             just('=')
@@ -479,13 +476,31 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
         .map(|(l, r)| (l + "." + &r).parse().unwrap())
         .map(Literal::Float);
 
-    choice((int, float, string)).map(Expr::Literal)
+    choice((int, float, string))
+        .then_ignore(whitespace())
+        .map(Expr::Literal)
 }
 
 fn parse_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
     todo()
 }
 
-fn parse_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    todo()
+fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    choice((parse_capture_pattern(m),))
+}
+
+fn parse_capture_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    ident()
+        .try_map(|iden: String, span| {
+            if iden.starts_with(|c: char| c.is_lowercase()) {
+                Ok(iden)
+            } else {
+                Err(Simple::custom(
+                    span,
+                    "capture must start with lowercase letter",
+                ))
+            }
+        })
+        .then_ignore(whitespace())
+        .map(Pattern::Exact)
 }

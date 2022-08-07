@@ -194,9 +194,8 @@ pub enum Type {
         /// The function being applied. This must be a generic type.
         function: Box<Type>,
 
-        /// The expression given as an argument to the type. This can be any expression, to allow
-        /// const generics; in most cases, though, it should be just a normal type.
-        expression: Box<Expr>,
+        /// The type given as an argument to the type.
+        expression: Box<Type>,
     },
 
     /// `(a, b)`
@@ -210,6 +209,9 @@ pub enum Type {
 /// statements.
 #[derive(Clone, Debug)]
 pub enum Pattern {
+    /// `a`
+    Capture(String),
+
     /// `(a, b)`
     Tuple(Vec<Pattern>),
 
@@ -227,9 +229,6 @@ pub enum Pattern {
 
     /// `Foo { a: x, b: y, ... }`
     Destructure(String, Record),
-
-    /// `a`
-    Capture(String),
 
     /// `_`
     Ignore,
