@@ -541,22 +541,95 @@ fn parse_record_type(
 }
 
 fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    // TODO: add all the patterns
-    choice((parse_capture_pattern(m),))
+    recursive(|rec| {
+        choice((
+            parse_ignore_pattern(m),
+            parse_capture_pattern(m),
+            parse_literal_pattern(m),
+            parse_tuple_pattern(m, rec.clone()),
+            parse_record_pattern(m, rec.clone()),
+        ))
+        .repeated()
+        .at_least(1)
+        .map(|pats| {
+            pats.into_iter()
+                .reduce(|l, r| Pattern::Destructure(Box::new(l), Box::new(r)))
+                .unwrap()
+        })
+        .then(
+            just(':')
+                .then(whitespace())
+                .ignore_then(parse_type(m))
+                .or_not(),
+        )
+        .map(|(pat, typ)| match typ {
+            Some(typ) => Pattern::TypeAnnotated {
+                pat: Box::new(pat),
+                typ: Box::new(typ),
+            },
+            None => pat,
+        })
+    })
+}
+
+fn parse_ignore_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    keyword("_").then_ignore(whitespace()).to(Pattern::Ignore)
 }
 
 fn parse_capture_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    ident()
-        .try_map(|iden: String, span| {
-            if iden.starts_with(|c: char| c.is_lowercase()) {
-                Ok(iden)
+    ident().then_ignore(whitespace()).map(Pattern::Capture)
+}
+
+fn parse_tuple_pattern(
+    _m: &ParserMeta,
+    rec: impl Parser<char, Pattern, Error = Simple<char>>,
+) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    rec.separated_by(just(',').then(whitespace()))
+        .allow_trailing()
+        .delimited_by(just('(').then(whitespace()), just(')').then(whitespace()))
+        .map(|pats| {
+            if pats.len() == 1 {
+                // `(Int)` is the same as `Int`
+                pats.into_iter().next().unwrap()
             } else {
-                Err(Simple::custom(
-                    span,
-                    "capture must start with lowercase letter",
-                ))
+                Pattern::Tuple(pats)
             }
         })
-        .then_ignore(whitespace())
-        .map(Pattern::Exact)
+}
+
+fn parse_record_pattern(
+    _m: &ParserMeta,
+    rec: impl Parser<char, Pattern, Error = Simple<char>>,
+) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    let item = ident().then_ignore(whitespace()).then(
+        just(':')
+            .ignore_then(whitespace())
+            .ignore_then(rec)
+            .or_not(),
+    );
+
+    let items = item
+        .separated_by(just(',').then(whitespace()))
+        .allow_trailing();
+
+    let ellipsis = just("...")
+        .ignore_then(whitespace())
+        .or_not()
+        .map(|ellipsis| ellipsis.is_some());
+
+    items
+        .then(ellipsis)
+        .delimited_by(just('{').then(whitespace()), just('}').then(whitespace()))
+        .map(|(members, inexhaustive)| Pattern::Record {
+            members,
+            inexhaustive,
+        })
+}
+
+fn parse_literal_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
+    // TODO: factor out literal parsing so we don't have to do this ugly `unreachable` stuff.
+    parse_literal(m).map(|e| match e {
+        Expr::Literal(lit) => Pattern::Literal(lit),
+        _ => unreachable!(),
+    })
 }

@@ -215,6 +215,15 @@ pub enum Pattern {
     /// `(a, b)`
     Tuple(Vec<Pattern>),
 
+    /// `{a: x, b: y}`
+    Record {
+        /// The named members of the record, in order of occurrence.
+        members: Vec<(String, Option<Pattern>)>,
+
+        /// Whether the record ends with "...", for ignoring unlisted elements.
+        inexhaustive: bool,
+    },
+
     /// `a: String`
     TypeAnnotated {
         /// The pattern being annotated.
@@ -224,27 +233,16 @@ pub enum Pattern {
         typ: Box<Type>,
     },
 
-    /// `Foo`
-    Exact(String),
-
     /// `Foo { a: x, b: y, ... }`
-    Destructure(String, Record),
+    // Note that the left side here *must* be just one word, semantically; but we let it be a
+    // Pattern to make parsing easier.
+    Destructure(Box<Pattern>, Box<Pattern>),
 
     /// `_`
     Ignore,
 
     /// `"hello"`
     Literal(Literal),
-}
-
-/// Record syntax blocks, e.g., "{a: b, c: d, ...}".
-#[derive(Clone, Debug)]
-pub struct Record {
-    /// The named members of the record, in order of occurrence.
-    pub members: Vec<(String, Expr)>,
-
-    /// Whether the record ends with "..."; this allows ignoring blocks.
-    pub inexhaustive: bool,
 }
 
 /// Literal values included in source code.
