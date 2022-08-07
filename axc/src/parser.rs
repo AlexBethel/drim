@@ -4,6 +4,7 @@ use std::{error::Error, fmt::Display};
 
 use chumsky::{
     prelude::{choice, end, just, none_of, one_of, Simple},
+    recursive::recursive,
     text::{ident, int, keyword, whitespace},
     Parser,
 };
@@ -483,19 +484,40 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
 }
 
 fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
-    parse_named_type(m).repeated().at_least(1).map(|types| {
-        types
-            .into_iter()
-            .reduce(|l, r| Type::Application {
-                function: Box::new(l),
-                expression: Box::new(r),
+    recursive(|rec| {
+        choice((parse_named_type(m), parse_tuple_type(m, rec)))
+            .repeated()
+            .at_least(1)
+            .map(|types| {
+                types
+                    .into_iter()
+                    .reduce(|l, r| Type::Application {
+                        function: Box::new(l),
+                        expression: Box::new(r),
+                    })
+                    .unwrap()
             })
-            .unwrap()
     })
 }
 
 fn parse_named_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
     ident().then_ignore(whitespace()).map(Type::Named)
+}
+
+fn parse_tuple_type(
+    _m: &ParserMeta,
+    rec: impl Parser<char, Type, Error = Simple<char>>,
+) -> impl Parser<char, Type, Error = Simple<char>> {
+    rec.separated_by(just(',').then(whitespace()))
+        .allow_trailing()
+        .delimited_by(just('(').then(whitespace()), just(')').then(whitespace()))
+        .map(|types| {
+            if types.len() == 1 {
+                types.into_iter().next().unwrap()
+            } else {
+                Type::Tuple(types)
+            }
+        })
 }
 
 fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
