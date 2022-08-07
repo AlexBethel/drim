@@ -3,8 +3,8 @@
 use std::{error::Error, fmt::Display};
 
 use chumsky::{
-    prelude::{choice, end, just, one_of, todo, Simple},
-    text::{ident, keyword, whitespace},
+    prelude::{choice, end, just, none_of, one_of, todo, Simple},
+    text::{ident, int, keyword, whitespace},
     Parser,
 };
 
@@ -437,10 +437,49 @@ fn parse_binary<'a>(
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    // TODO: add all the literals.
-    chumsky::text::int(10)
+    let string_char = none_of("\"\\").or(just('\\').ignore_then(choice((
+        just('n').to('\n'),
+        just('t').to('\t'),
+        just('r').to('\r'),
+        just('0').to('\x00'),
+        just('\'').to('\''),
+        just('\"').to('\"'),
+        just('x').ignore_then(
+            one_of("0123456789abcdefABCDEF")
+                .repeated()
+                .exactly(2)
+                .collect::<String>()
+                .map(|s| u8::from_str_radix(&s, 16).unwrap().try_into().unwrap()),
+        ),
+        just('u').ignore_then(
+            one_of("0123456789abcdefABCDEF")
+                .repeated()
+                .collect::<String>()
+                .map(|s| u32::from_str_radix(&s, 16).unwrap().try_into().unwrap()),
+        ),
+    ))));
+
+    let int = int(10)
         .then_ignore(whitespace())
-        .map(|s: String| Expr::Literal(Literal::Integer(s.parse().unwrap())))
+        .map(|s: String| s.parse().unwrap())
+        .map(Literal::Integer);
+
+    let string = string_char
+        .clone()
+        .repeated()
+        .collect()
+        .delimited_by(just('\"'), just('\"'))
+        .map(Literal::String);
+
+    let float = one_of("0123456789")
+        .repeated()
+        .collect::<String>()
+        .then_ignore(just('.'))
+        .then(one_of("0123456789").repeated().collect::<String>())
+        .map(|(l, r)| (l + "." + &r).parse().unwrap())
+        .map(Literal::Float);
+
+    choice((int, float, string)).map(Expr::Literal)
 }
 
 fn parse_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
