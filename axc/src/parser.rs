@@ -215,14 +215,16 @@ impl Default for ParserMeta {
 
 /// Parser for AlexScript code.
 pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> + 'a {
-    parse_statement(m)
-        .repeated()
-        .map(SyntaxTree)
-        .then_ignore(end())
-        .map(|exprs| {
-            println!("{:#?}", exprs);
-            todo!()
-        })
+    whitespace_cmt().ignore_then(
+        parse_statement(m)
+            .repeated()
+            .map(SyntaxTree)
+            .then_ignore(end())
+            .map(|exprs| {
+                println!("{:#?}", exprs);
+                todo!()
+            }),
+    )
 }
 
 fn parse_statement<'a>(
@@ -237,16 +239,16 @@ fn parse_statement<'a>(
 }
 
 fn parse_type_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple<char>> {
-    keyword("data")
+    pad(keyword("data"))
         .ignore_then(parse_type(m))
-        .then_ignore(just('=').then(whitespace()))
+        .then_ignore(pad(just('=')))
         .then(parse_constructor(m).repeated())
-        .then_ignore(just(';').then(whitespace()))
+        .then_ignore(pad(just(';')))
         .map(|(typ, constructors)| Statement::TypeDefinition { typ, constructors })
 }
 
 fn parse_constructor(m: &ParserMeta) -> impl Parser<char, TypeConstructor, Error = Simple<char>> {
-    ident()
+    pad(ident())
         .then(parse_type(m).repeated())
         .map(|(name, args)| TypeConstructor { name, args })
 }
@@ -254,13 +256,13 @@ fn parse_constructor(m: &ParserMeta) -> impl Parser<char, TypeConstructor, Error
 fn parse_instance_def<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
-    keyword("instance")
-        .ignore_then(ident())
+    pad(keyword("instance"))
+        .ignore_then(pad(ident()))
         .then(parse_type(m))
         .then(
             parse_class_member(m)
                 .repeated()
-                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
+                .delimited_by(pad(just('{')), pad(just('}'))),
         )
         .map(|((classname, typ), decls)| Statement::InstanceDefinition {
             class_name: classname,
@@ -284,17 +286,11 @@ fn parse_class_member<'a>(
 fn parse_func_decl<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, ClassMember, Error = Simple<char>> + 'a {
-    keyword("def")
-        .then_ignore(whitespace())
-        .ignore_then(ident().then_ignore(whitespace()))
+    pad(keyword("def"))
+        .ignore_then(pad(ident()))
         .then(parse_pattern(m).repeated())
-        .then(
-            just('=')
-                .then(whitespace())
-                .ignore_then(parse_expression(m))
-                .or_not(),
-        )
-        .then_ignore(just(';').then(whitespace()))
+        .then(pad(just('=')).ignore_then(parse_expression(m)).or_not())
+        .then_ignore(pad(just(';')))
         .map(|((name, arguments), definition)| ClassMember::Function {
             name,
             arguments,
@@ -303,29 +299,23 @@ fn parse_func_decl<'a>(
 }
 
 fn parse_type_alias(m: &ParserMeta) -> impl Parser<char, ClassMember, Error = Simple<char>> {
-    keyword("type")
-        .then_ignore(whitespace())
+    pad(keyword("type"))
         .ignore_then(parse_type(m))
-        .then(
-            just('=')
-                .then(whitespace())
-                .ignore_then(parse_type(m))
-                .or_not(),
-        )
-        .then_ignore(just(';').then(whitespace()))
+        .then(pad(just('=')).ignore_then(parse_type(m)).or_not())
+        .then_ignore(pad(just(';')))
         .map(|(left, right)| ClassMember::TypeAlias { left, right })
 }
 
 fn parse_class_def<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
-    keyword("class")
-        .ignore_then(ident())
-        .then(ident())
+    pad(keyword("class"))
+        .ignore_then(pad(ident()))
+        .then(pad(ident()))
         .then(
             parse_class_member(m)
                 .repeated()
-                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
+                .delimited_by(pad(just('{')), pad(just('}'))),
         )
         .map(|((name, var), decls)| Statement::ClassDefinition { name, var, decls })
 }
@@ -355,8 +345,7 @@ fn parse_unary(
     _m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    choice((just("-").to("-"), just("+").to("+")))
-        .then_ignore(whitespace())
+    pad(choice((just("-").to("-"), just("+").to("+"))))
         .repeated()
         .then(base.clone())
         .map(|(ops, exp)| {
@@ -374,8 +363,7 @@ fn parse_binary<'a>(
 ) -> impl Parser<char, Expr, Error = Simple<char>> + 'a + Clone {
     let op_defs = m.operators.iter().filter(|def| def.precedence == prec);
     let op_parsers = op_defs.map(|def| {
-        just(def.name.to_string())
-            .then(whitespace())
+        pad(just(def.name.to_string()))
             .ignore_then(base.clone())
             .map(|e| (&def.name, &def.assoc, e))
     });
@@ -452,12 +440,11 @@ fn parse_let_expr(
     m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    keyword("let")
-        .then(whitespace())
+    pad(keyword("let"))
         .ignore_then(parse_pattern(m))
-        .then_ignore(just('=').then(whitespace()))
+        .then_ignore(pad(just('=')))
         .then(base.clone())
-        .then_ignore(keyword("in").then(whitespace()))
+        .then_ignore(pad(keyword("in")))
         .then(base.clone())
         .map(|((left, right), into)| Expr::Let {
             left,
@@ -470,16 +457,15 @@ fn parse_match_expr(
     m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    keyword("match")
-        .then(whitespace())
+    pad(keyword("match"))
         .ignore_then(base.clone())
         .then(
             parse_pattern(m)
-                .then_ignore(just("=>").then(whitespace()))
+                .then_ignore(pad(just("=>")))
                 .then(base.clone())
-                .separated_by(just(",").then(whitespace()))
+                .separated_by(pad(just(",")))
                 .allow_trailing()
-                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
+                .delimited_by(pad(just('{')), pad(just('}'))),
         )
         .map(|(matcher, cases)| Expr::Match {
             matcher: Box::new(matcher),
@@ -491,14 +477,12 @@ fn parse_record_expr(
     _m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    ident()
-        .then_ignore(whitespace())
-        .then_ignore(just(':'))
-        .then_ignore(whitespace())
+    pad(ident())
+        .then_ignore(pad(just(':')))
         .then(base)
-        .separated_by(just(',').then(whitespace()))
+        .separated_by(pad(just(',')))
         .allow_trailing()
-        .delimited_by(just('{').then(whitespace()), just('}').then(whitespace()))
+        .delimited_by(pad(just('{')), pad(just('}')))
         .map(Expr::Record)
 }
 
@@ -506,10 +490,9 @@ fn parse_lambda_expr(
     m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    keyword("fn")
-        .then(whitespace())
+    pad(keyword("fn"))
         .ignore_then(parse_pattern(m).repeated())
-        .then_ignore(just("->").then(whitespace()))
+        .then_ignore(pad(just("->")))
         .then(base)
         .map(|(arguments, result)| Expr::Lambda {
             arguments,
@@ -529,12 +512,11 @@ fn parse_subscript_expr(
     base.clone()
         .then(
             choice((
-                just('.')
-                    .ignore_then(whitespace())
+                pad(just('.'))
                     .ignore_then(base.clone())
                     .map(|e| (SubscriptKind::Dot, e)),
                 base.clone()
-                    .delimited_by(just('[').then(whitespace()), just(']').then(whitespace()))
+                    .delimited_by(pad(just('[')), pad(just(']')))
                     .map(|e| (SubscriptKind::Bracket, e)),
             ))
             .repeated(),
@@ -554,9 +536,8 @@ fn parse_subscript_expr(
 }
 
 fn parse_var_ref_expr(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    ident()
-        .then_ignore(whitespace())
-        .separated_by(just("::").then(whitespace()))
+    pad(ident())
+        .separated_by(pad(just("::")))
         .map(Expr::VariableReference)
 }
 
@@ -584,7 +565,6 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
     ))));
 
     let int = int(10)
-        .then_ignore(whitespace())
         .map(|s: String| s.parse().unwrap())
         .map(Literal::Integer);
 
@@ -603,9 +583,7 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
         .map(|(l, r)| (l + "." + &r).parse().unwrap())
         .map(Literal::Float);
 
-    choice((int, float, string))
-        .then_ignore(whitespace())
-        .map(Expr::Literal)
+    pad(choice((int, float, string))).map(Expr::Literal)
 }
 
 fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
@@ -630,16 +608,16 @@ fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
 }
 
 fn parse_named_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
-    ident().then_ignore(whitespace()).map(Type::Named)
+    pad(ident()).map(Type::Named)
 }
 
 fn parse_tuple_type(
     _m: &ParserMeta,
     rec: impl Parser<char, Type, Error = Simple<char>>,
 ) -> impl Parser<char, Type, Error = Simple<char>> {
-    rec.separated_by(just(',').then(whitespace()))
+    rec.separated_by(pad(just(',')))
         .allow_trailing()
-        .delimited_by(just('(').then(whitespace()), just(')').then(whitespace()))
+        .delimited_by(pad(just('(')), pad(just(')')))
         .map(|types| {
             if types.len() == 1 {
                 // `(Int)` is the same as `Int`
@@ -654,14 +632,12 @@ fn parse_record_type(
     _m: &ParserMeta,
     rec: impl Parser<char, Type, Error = Simple<char>>,
 ) -> impl Parser<char, Type, Error = Simple<char>> {
-    ident()
-        .then_ignore(whitespace())
-        .then_ignore(just(':'))
-        .then_ignore(whitespace())
+    pad(ident())
+        .then_ignore(pad(just(':')))
         .then(rec)
-        .separated_by(just(',').then(whitespace()))
+        .separated_by(pad(just(',')))
         .allow_trailing()
-        .delimited_by(just('{').then(whitespace()), just('}').then(whitespace()))
+        .delimited_by(pad(just('{')), pad(just('}')))
         .map(Type::Record)
 }
 
@@ -681,12 +657,7 @@ fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<ch
                 .reduce(|l, r| Pattern::Destructure(Box::new(l), Box::new(r)))
                 .unwrap()
         })
-        .then(
-            just(':')
-                .then(whitespace())
-                .ignore_then(parse_type(m))
-                .or_not(),
-        )
+        .then(pad(just(':')).ignore_then(parse_type(m)).or_not())
         .map(|(pat, typ)| match typ {
             Some(typ) => Pattern::TypeAnnotated {
                 pat: Box::new(pat),
@@ -698,20 +669,20 @@ fn parse_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<ch
 }
 
 fn parse_ignore_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    keyword("_").then_ignore(whitespace()).to(Pattern::Ignore)
+    pad(keyword("_")).to(Pattern::Ignore)
 }
 
 fn parse_capture_pattern(_m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    ident().then_ignore(whitespace()).map(Pattern::Capture)
+    pad(ident()).map(Pattern::Capture)
 }
 
 fn parse_tuple_pattern(
     _m: &ParserMeta,
     rec: impl Parser<char, Pattern, Error = Simple<char>>,
 ) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    rec.separated_by(just(',').then(whitespace()))
+    rec.separated_by(pad(just(',')))
         .allow_trailing()
-        .delimited_by(just('(').then(whitespace()), just(')').then(whitespace()))
+        .delimited_by(pad(just('(')), pad(just(')')))
         .map(|pats| {
             if pats.len() == 1 {
                 // `(Int)` is the same as `Int`
@@ -726,25 +697,13 @@ fn parse_record_pattern(
     _m: &ParserMeta,
     rec: impl Parser<char, Pattern, Error = Simple<char>>,
 ) -> impl Parser<char, Pattern, Error = Simple<char>> {
-    let item = ident().then_ignore(whitespace()).then(
-        just(':')
-            .ignore_then(whitespace())
-            .ignore_then(rec)
-            .or_not(),
-    );
-
-    let items = item
-        .separated_by(just(',').then(whitespace()))
-        .allow_trailing();
-
-    let ellipsis = just("...")
-        .ignore_then(whitespace())
-        .or_not()
-        .map(|ellipsis| ellipsis.is_some());
+    let item = pad(ident()).then(pad(just(':')).ignore_then(rec).or_not());
+    let items = item.separated_by(pad(just(','))).allow_trailing();
+    let ellipsis = pad(just("...")).or_not().map(|ellipsis| ellipsis.is_some());
 
     items
         .then(ellipsis)
-        .delimited_by(just('{').then(whitespace()), just('}').then(whitespace()))
+        .delimited_by(pad(just('{')), pad(just('}')))
         .map(|(members, inexhaustive)| Pattern::Record {
             members,
             inexhaustive,
@@ -757,4 +716,20 @@ fn parse_literal_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = S
         Expr::Literal(lit) => Pattern::Literal(lit),
         _ => unreachable!(),
     })
+}
+
+fn whitespace_cmt() -> impl Parser<char, (), Error = Simple<char>> + Clone {
+    whitespace().then_ignore(
+        just("//")
+            .then(none_of("\n").repeated())
+            .then(just('\n'))
+            .then(whitespace())
+            .repeated(),
+    )
+}
+
+fn pad<T>(
+    p: impl Parser<char, T, Error = Simple<char>> + Clone,
+) -> impl Parser<char, T, Error = Simple<char>> + Clone {
+    p.then_ignore(whitespace_cmt())
 }
