@@ -3,7 +3,7 @@
 use std::{error::Error, fmt::Display};
 
 use chumsky::{
-    prelude::{choice, end, just, none_of, one_of, todo, Simple},
+    prelude::{choice, end, just, none_of, one_of, Simple},
     recursive::recursive,
     text::{ident, int, keyword, whitespace},
     Parser,
@@ -333,11 +333,13 @@ fn parse_class_def<'a>(
 fn parse_expression<'a>(m: &'a ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + 'a {
     recursive(|full_expr| {
         let lambda = parse_lambda_expr(m, full_expr.clone());
+        let let_ = parse_let_expr(m, full_expr.clone());
+        let match_ = parse_match_expr(m, full_expr.clone());
         let record = parse_record_expr(m, full_expr.clone());
 
         let base = choice((parse_literal(m), parse_var_ref_expr(m)));
         let subscript = parse_subscript_expr(m, base);
-        let term = choice((lambda, record, subscript));
+        let term = choice((lambda, let_, match_, record, subscript));
 
         let unary = parse_unary(m, term);
 
@@ -446,6 +448,45 @@ fn parse_binary<'a>(
     })
 }
 
+fn parse_let_expr(
+    m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    keyword("let")
+        .then(whitespace())
+        .ignore_then(parse_pattern(m))
+        .then_ignore(just('=').then(whitespace()))
+        .then(base.clone())
+        .then_ignore(keyword("in").then(whitespace()))
+        .then(base.clone())
+        .map(|((left, right), into)| Expr::Let {
+            left,
+            right: Box::new(right),
+            into: Box::new(into),
+        })
+}
+
+fn parse_match_expr(
+    m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    keyword("match")
+        .then(whitespace())
+        .ignore_then(base.clone())
+        .then(
+            parse_pattern(m)
+                .then_ignore(just("=>").then(whitespace()))
+                .then(base.clone())
+                .separated_by(just(",").then(whitespace()))
+                .allow_trailing()
+                .delimited_by(just('{').then(whitespace()), just('}').then(whitespace())),
+        )
+        .map(|(matcher, cases)| Expr::Match {
+            matcher: Box::new(matcher),
+            cases,
+        })
+}
+
 fn parse_record_expr(
     _m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
@@ -512,7 +553,7 @@ fn parse_subscript_expr(
         })
 }
 
-fn parse_var_ref_expr(m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+fn parse_var_ref_expr(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     ident()
         .then_ignore(whitespace())
         .separated_by(just("::").then(whitespace()))
