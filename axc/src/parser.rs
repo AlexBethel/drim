@@ -331,7 +331,7 @@ fn parse_expression<'a>(
         let tuple = parse_tuple_expr(m, full_expr.clone());
 
         let base = choice((parse_literal(m), parse_var_ref_expr(m)));
-        let subscript = parse_subscript_expr(m, base);
+        let subscript = parse_subscript_expr(m, base, full_expr.clone());
         let term = choice((lambda, let_, match_, record, subscript, tuple));
 
         let application = term.repeated().at_least(1).map(|exprs| {
@@ -518,6 +518,7 @@ fn parse_lambda_expr(
 fn parse_subscript_expr(
     _m: &ParserMeta,
     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     enum SubscriptKind {
         Dot,
@@ -530,7 +531,7 @@ fn parse_subscript_expr(
                 pad(just('.'))
                     .ignore_then(base.clone())
                     .map(|e| (SubscriptKind::Dot, e)),
-                base.clone()
+                rec.clone()
                     .delimited_by(pad(just('[')), pad(just(']')))
                     .map(|e| (SubscriptKind::Bracket, e)),
             ))
