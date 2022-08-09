@@ -320,20 +320,34 @@ fn parse_class_def<'a>(
         .map(|((name, var), decls)| Statement::ClassDefinition { name, var, decls })
 }
 
-fn parse_expression<'a>(m: &'a ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + 'a {
+fn parse_expression<'a>(
+    m: &'a ParserMeta,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone + 'a {
     recursive(|full_expr| {
         let lambda = parse_lambda_expr(m, full_expr.clone());
         let let_ = parse_let_expr(m, full_expr.clone());
         let match_ = parse_match_expr(m, full_expr.clone());
         let record = parse_record_expr(m, full_expr.clone());
+        let tuple = parse_tuple_expr(m, full_expr.clone());
 
         let base = choice((parse_literal(m), parse_var_ref_expr(m)));
         let subscript = parse_subscript_expr(m, base);
-        let term = choice((lambda, let_, match_, record, subscript));
+        let term = choice((lambda, let_, match_, record, subscript, tuple));
 
-        let unary = parse_unary(m, term);
+        // let unary = parse_unary(m, term);
+        let unary = term;
 
-        let binary = (0..=10).rev().fold(unary.boxed(), |p, precedence| {
+        let application = unary.repeated().at_least(1).map(|exprs| {
+            exprs
+                .into_iter()
+                .reduce(|l, r| Expr::Application {
+                    func: Box::new(l),
+                    argument: Box::new(r),
+                })
+                .unwrap()
+        });
+
+        let binary = (0..=10).rev().fold(application.boxed(), |p, precedence| {
             parse_binary(m, precedence, p).boxed()
         });
 
@@ -341,20 +355,20 @@ fn parse_expression<'a>(m: &'a ParserMeta) -> impl Parser<char, Expr, Error = Si
     })
 }
 
-fn parse_unary(
-    _m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
-) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    pad(choice((just("-").to("-"), just("+").to("+"))))
-        .repeated()
-        .then(base.clone())
-        .map(|(ops, exp)| {
-            ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
-                kind: op.to_string(),
-                val: Box::new(exp),
-            })
-        })
-}
+// fn parse_unary(
+//     _m: &ParserMeta,
+//     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+// ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+//     pad(just("-").to("-"))
+//         .repeated()
+//         .then(base.clone())
+//         .map(|(ops, exp)| {
+//             ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
+//                 kind: op.to_string(),
+//                 val: Box::new(exp),
+//             })
+//         })
+// }
 
 fn parse_binary<'a>(
     m: &'a ParserMeta,
@@ -535,10 +549,29 @@ fn parse_subscript_expr(
         })
 }
 
+fn parse_tuple_expr(
+    _m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    base.separated_by(pad(just(',')))
+        .delimited_by(pad(just('(')), pad(just(')')))
+        .map(|exprs| {
+            if exprs.len() == 1 {
+                exprs.into_iter().next().unwrap()
+            } else {
+                Expr::Tuple(exprs)
+            }
+        })
+}
+
 fn parse_var_ref_expr(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    pad(ident())
-        .separated_by(pad(just("::")))
-        .map(Expr::VariableReference)
+    choice((
+        pad(just("~")).to(Expr::VariableReference(vec!["~".to_string()])),
+        pad(ident())
+            .separated_by(pad(just("::")))
+            .at_least(1)
+            .map(Expr::VariableReference),
+    ))
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
@@ -722,7 +755,7 @@ fn whitespace_cmt() -> impl Parser<char, (), Error = Simple<char>> + Clone {
     whitespace().then_ignore(
         just("//")
             .then(none_of("\n").repeated())
-            .then(just('\n'))
+            .then(just('\n').to(()).or(end()))
             .then(whitespace())
             .repeated(),
     )

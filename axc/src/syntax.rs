@@ -173,6 +173,9 @@ pub enum Expr {
         subscript: Box<Expr>,
     },
 
+    /// Tuple expressions, e.g., `(2, 3)`.
+    Tuple(Vec<Expr>),
+
     /// Variable references, possibly namespaced, e.g., `foo::bar::baz`.
     VariableReference(Vec<String>),
 
