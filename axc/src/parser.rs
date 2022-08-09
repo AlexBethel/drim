@@ -222,7 +222,7 @@ pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Si
             .then_ignore(end())
             .map(|exprs| {
                 println!("{:#?}", exprs);
-                todo!()
+                exprs
             }),
     )
 }
@@ -763,4 +763,221 @@ fn pad<T>(
     p: impl Parser<char, T, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, T, Error = Simple<char>> + Clone {
     p.then_ignore(whitespace_cmt())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type_def() {
+        assert!(parser(&ParserMeta::default())
+            .parse("data Suit = Hearts | Spades | Diamonds | Clubs | Other Int;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_inst_def() {
+        assert!(parser(&ParserMeta::default())
+            .parse(
+                "instance Integral Int {
+                     def add l r = l + r;
+                }"
+            )
+            .is_ok())
+    }
+
+    #[test]
+    fn test_class_def() {
+        assert!(parser(&ParserMeta::default())
+            .parse(
+                "class Integral i {
+                     def add (l: Int) (r: Int) : Int;
+                 }"
+            )
+            .is_ok())
+    }
+
+    #[test]
+    fn test_func_def() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def subtract (l: Int) (r: Int) : Int = l - r;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_type_alias_def() {
+        assert!(parser(&ParserMeta::default())
+            .parse("type Thing = Suit;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_unary() {
+        assert!(parser(&ParserMeta::default())
+            .parse(
+                "def x = -5;                    // unary - on 5
+                 def x = 2 - 5;                 // subtraction of 2 and 5
+                 def x = 2 - - 5;               // subtraction of 2 and unary - on 5
+                 def x = 2 (- 5);               // call 2 (as function) on unary - on 5"
+            )
+            .is_ok())
+    }
+
+    #[test]
+    fn test_binary() {
+        assert!(parser(&ParserMeta::default())
+            .parse(
+                "def x = 2 + 2;
+                 def x = 1 ^ 2 * 3 + 4 ++ 5 == 6 & 7 | 8 >> 9;
+                 def x = 1 >> 2 | 3 & 4 == 5 ++ 6 + 7 * 8 ^ 9;"
+            )
+            .is_ok())
+    }
+
+    #[test]
+    fn test_app() {
+        assert!(parser(&ParserMeta::default())
+            .parse(
+                "def x = sin x;
+                 def x = f g x;"
+            )
+            .is_ok())
+    }
+
+    #[test]
+    fn test_let() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = let z = 5 in z;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_match() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = match foo { \"hi\" => 123 };")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_record() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = { hello: \"World\", foo: \"Bar\" };")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_lambda() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = fn (x: Int) (y: Int) -> x + y;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_dot_sub() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = foo.bar.baz;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_bracket_sub() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = foo[bar[baz]][xyz];")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_tuple() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = (1, 2, (), (3));")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_type_namespace() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = foo::bar::baz;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_literals() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = \"hello\" + 123 + 123.456;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_type_name() {
+        assert!(parser(&ParserMeta::default())
+            .parse("type a = Foo;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_type_appl() {
+        assert!(parser(&ParserMeta::default())
+            .parse("type a = Something Foo Bar;")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_tuple_type() {
+        assert!(parser(&ParserMeta::default())
+            .parse("type a = (Int, String);")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_record_type() {
+        assert!(parser(&ParserMeta::default())
+            .parse("type a = {foo: String, bar: Int};")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_capture_pat() {
+        assert!(parser(&ParserMeta::default()).parse("def foo a;").is_ok())
+    }
+
+    #[test]
+    fn test_tuple_pat() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def foo (a, b);")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_record_pat() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def foo { a: x, b, ... };")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_type_annot() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def foo (a: String);")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_destructure() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def foo (Just a);")
+            .is_ok())
+    }
+
+    #[test]
+    fn test_ignore_pat() {
+        assert!(parser(&ParserMeta::default()).parse("def foo _;").is_ok())
+    }
+
+    #[test]
+    fn test_literal_pat() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def foo \"x\";")
+            .is_ok())
+    }
 }
