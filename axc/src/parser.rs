@@ -334,10 +334,7 @@ fn parse_expression<'a>(
         let subscript = parse_subscript_expr(m, base);
         let term = choice((lambda, let_, match_, record, subscript, tuple));
 
-        // let unary = parse_unary(m, term);
-        let unary = term;
-
-        let application = unary.repeated().at_least(1).map(|exprs| {
+        let application = term.repeated().at_least(1).map(|exprs| {
             exprs
                 .into_iter()
                 .reduce(|l, r| Expr::Application {
@@ -347,7 +344,11 @@ fn parse_expression<'a>(
                 .unwrap()
         });
 
-        let binary = (0..=10).rev().fold(application.boxed(), |p, precedence| {
+        // let unary = parse_unary(m, term);
+        // let unary = term;
+        let unary = parse_unary(m, application);
+
+        let binary = (0..=10).rev().fold(unary.boxed(), |p, precedence| {
             parse_binary(m, precedence, p).boxed()
         });
 
@@ -355,20 +356,20 @@ fn parse_expression<'a>(
     })
 }
 
-// fn parse_unary(
-//     _m: &ParserMeta,
-//     base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
-// ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-//     pad(just("-").to("-"))
-//         .repeated()
-//         .then(base.clone())
-//         .map(|(ops, exp)| {
-//             ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
-//                 kind: op.to_string(),
-//                 val: Box::new(exp),
-//             })
-//         })
-// }
+fn parse_unary(
+    _m: &ParserMeta,
+    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    pad(just("-").to("-"))
+        .repeated()
+        .then(base.clone())
+        .map(|(ops, exp)| {
+            ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
+                kind: op.to_string(),
+                val: Box::new(exp),
+            })
+        })
+}
 
 fn parse_binary<'a>(
     m: &'a ParserMeta,
@@ -565,13 +566,10 @@ fn parse_tuple_expr(
 }
 
 fn parse_var_ref_expr(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    choice((
-        pad(just("~")).to(Expr::VariableReference(vec!["~".to_string()])),
-        pad(ident())
-            .separated_by(pad(just("::")))
-            .at_least(1)
-            .map(Expr::VariableReference),
-    ))
+    pad(ident())
+        .separated_by(pad(just("::")))
+        .at_least(1)
+        .map(Expr::VariableReference)
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
