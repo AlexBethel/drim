@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display};
 use chumsky::{
     prelude::{choice, end, just, none_of, one_of, Simple},
     recursive::recursive,
-    text::{ident, int, keyword, whitespace},
+    text::{int, keyword, whitespace},
     Parser,
 };
 
@@ -212,6 +212,21 @@ impl Default for ParserMeta {
         }
     }
 }
+
+/// The list of reserved words that cannot be used as identifiers in AlexScript.
+#[rustfmt::skip]                // keep this on separate lines for sorting
+pub const RESERVED: &'static [&'static str] = &[
+    "_",
+    "class",
+    "data",
+    "def",
+    "fn",
+    "in",
+    "instance",
+    "let",
+    "match",
+    "type",
+];
 
 /// Parser for AlexScript code.
 pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> + 'a {
@@ -764,6 +779,16 @@ fn pad<T>(
     p: impl Parser<char, T, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, T, Error = Simple<char>> + Clone {
     p.then_ignore(whitespace_cmt())
+}
+
+fn ident() -> impl Parser<char, String, Error = Simple<char>> + Clone {
+    chumsky::text::ident().try_map(|i: String, span| {
+        if RESERVED.contains(&(&i as &str)) {
+            Err(Simple::custom(span, format!("reserved identifer \"{i}\"")))
+        } else {
+            Ok(i)
+        }
+    })
 }
 
 #[cfg(test)]
