@@ -257,7 +257,7 @@ fn parse_type_def(m: &ParserMeta) -> impl Parser<char, Statement, Error = Simple
     pad(keyword("data"))
         .ignore_then(parse_type(m))
         .then_ignore(pad(just('=')))
-        .then(parse_constructor(m).repeated())
+        .then(parse_constructor(m).separated_by(pad(just('|'))))
         .then_ignore(pad(just(';')))
         .map(|(typ, constructors)| Statement::TypeDefinition { typ, constructors })
 }
