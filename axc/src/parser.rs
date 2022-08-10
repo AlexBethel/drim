@@ -215,7 +215,7 @@ impl Default for ParserMeta {
 
 /// The list of reserved words that cannot be used as identifiers in AlexScript.
 #[rustfmt::skip]                // keep this on separate lines for sorting
-pub const RESERVED: &'static [&'static str] = &[
+pub const RESERVED: &[&str] = &[
     "_",
     "class",
     "data",
@@ -377,7 +377,7 @@ fn parse_unary(
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     pad(just("-").to("-"))
         .repeated()
-        .then(base.clone())
+        .then(base)
         .map(|(ops, exp)| {
             ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
                 kind: op.to_string(),
@@ -410,7 +410,7 @@ fn parse_binary<'a>(
             panic!("Precedence parsing error: conflicting associativities");
         }
 
-        let all_assoc = first_assoc.map(|o| **o).flatten();
+        let all_assoc = first_assoc.and_then(|o| **o);
 
         if all_assoc == None && others.len() >= 2 {
             panic!("Precedence parsing error: non-associative operation applied associatively");
@@ -475,7 +475,7 @@ fn parse_let_expr(
         .then_ignore(pad(just('=')))
         .then(base.clone())
         .then_ignore(pad(keyword("in")))
-        .then(base.clone())
+        .then(base)
         .map(|((left, right), into)| Expr::Let {
             left,
             right: Box::new(right),
@@ -492,7 +492,7 @@ fn parse_match_expr(
         .then(
             parse_pattern(m)
                 .then_ignore(pad(just("=>")))
-                .then(base.clone())
+                .then(base)
                 .separated_by(pad(just(",")))
                 .allow_trailing()
                 .delimited_by(pad(just('{')), pad(just('}'))),
@@ -544,9 +544,9 @@ fn parse_subscript_expr(
         .then(
             choice((
                 pad(just('.'))
-                    .ignore_then(base.clone())
+                    .ignore_then(base)
                     .map(|e| (SubscriptKind::Dot, e)),
-                rec.clone()
+                rec
                     .delimited_by(pad(just('[')), pad(just(']')))
                     .map(|e| (SubscriptKind::Bracket, e)),
             ))
