@@ -9,10 +9,9 @@ is formatted correctly! ~~abb
 
 # AlexScript
 
-AlexScript (which is a misnomer; the language will soon be renamed
-since it's not actually a scripting language) is a programming
-language designed to have a functional feel and very high-level
-ergonomics while maintaining speed using strictly-controlled,
+AlexScript is a programming language designed to have the very
+high-level ergonomics and provable correctness of a purely functional
+language, while maintaining speed using strictly-controlled,
 deterministic memory management. The language is capable of compiling
 to C (and possibly other languages in the future), allowing for
 maximum portability without having to write a new backend for the
@@ -20,25 +19,32 @@ compiler for every possible target; also, the compiler and tooling
 will eventually be rewritten in AlexScript to allow for maximum
 portability.
 
+Syntactically, the language primarily resembles a mixture between
+standard ML and Rust; the language always ignores whitespace.
+
+AlexScript is a misnomer; the language is not actually a scripting
+language and will probably be renamed in the near future.
+
 ## Example
 
 ```
 // Calculates the nth fibonacci number.
-def fibonacci (0: U32) : U32 = 0
-  | fibonacci 1 = 1
-  | fibonacci n = fibonacci (n - 2) + fibonacci (n - 1);
+def fibonacci (n: U32) : U32 = match n {
+  0 => 0,
+  1 => 1,
+  n => fibonacci (n - 2) + fibonacci (n - 1),
+};
 
 // Prompts the user for a number n, and prints the Fibonacci numbers up
 // to n.
-def fibPrompt
-  = do {
-    print "Enter a number: ";
-    num <- read <$> getLine;
-    sequence_ (print . fibonacci <$> (0 .. num));
-  };
+def fibPrompt = do {
+  print "Enter a number: ";
+  num <- read <$> getLine;
+  sequence_ (print . fibonacci <$> (0 .. num));
+};
 
 // Program entry point.
-def main: IO ()
+def main : IO ()
   = fibPrompt;
 ```
 
@@ -49,12 +55,17 @@ Note that type annotations are always optional; here they're given for
 ## Tools
 
 This repository contains the following tools:
-- `axc`, the AlexScript compiler. This can be used as a binary with a
-  fairly standard compiler CLI, or as a library for use in other
-  programs.
+- `axc-rs`, the Stage-1 AlexScript compiler, written in Rust. This can
+  be used as a binary with a fairly standard compiler CLI, or as a
+  library for use in other Rust programs.
 
 The following tools do not exist yet, but are planned:
-- `axci`, the interactive AlexScript interpreter.
+- `axc`, the main AlexScript compiler written in AlexScript. This
+  program supports a superset of the behavior of `axc-rs`, and exposes
+  a library that can be used by other AlexScript programs in addition
+  to a the compiler CLI.
+- `axci`, the interactive AlexScript interpreter, a wrapper around
+  `axc`.
 - `axcd`, the Language Server Protocol (LSP) server for AlexScript
   code support in editors, supporting definition peeking and lookup,
   renaming variables and modules, etc.
