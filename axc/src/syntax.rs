@@ -23,7 +23,7 @@ pub enum Statement {
     /// Declaration that a type implements a type class.
     InstanceDefinition {
         /// The name of the type class.
-        class_name: String,
+        class_name: Identifier,
 
         /// The type that conforms to the type class.
         typ: Type,
@@ -36,7 +36,7 @@ pub enum Statement {
     /// Declaration of a type class.
     ClassDefinition {
         /// The name of the class.
-        name: String,
+        name: Identifier,
 
         /// The type variable representing a type conforming to the class.
         var: String,
@@ -58,7 +58,7 @@ pub enum ClassMember {
     /// Declaration of a function or constant.
     Function {
         /// Name of the function.
-        name: String,
+        name: Identifier,
 
         /// The function arguments.
         arguments: Vec<Pattern>,
@@ -97,6 +97,9 @@ pub enum Expr {
 
         /// The value being operated upon.
         val: Box<Expr>,
+
+        /// The function that the unary operator translates to.
+        translation: String,
     },
 
     /// Binary operators, e.g., `5 + 5`.
@@ -109,6 +112,9 @@ pub enum Expr {
 
         /// The right side of the operator.
         right: Box<Expr>,
+
+        /// The function that the binary operator translates to.
+        translation: String,
     },
 
     /// Function application, e.g., `sin x`.
@@ -177,7 +183,7 @@ pub enum Expr {
     Tuple(Vec<Expr>),
 
     /// Variable references, possibly namespaced, e.g., `foo::bar::baz`.
-    VariableReference(Vec<String>),
+    VariableReference(Identifier),
 
     /// Literal tokens, e.g., strings and numbers.
     Literal(Literal),
@@ -187,7 +193,7 @@ pub enum Expr {
 #[derive(Clone, Debug)]
 pub enum Type {
     /// `Foo`
-    Named(String),
+    Named(Identifier),
 
     /// `List Int`
     Application {
@@ -243,6 +249,13 @@ pub enum Pattern {
 
     /// `"hello"`
     Literal(Literal),
+}
+
+/// Namespaced identifiers.
+#[derive(Clone, Debug)]
+pub struct Identifier {
+    /// The elements of the identifier; there must be at least one of these.
+    pub elems: Vec<String>,
 }
 
 /// Literal values included in source code.

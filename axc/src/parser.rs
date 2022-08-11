@@ -10,7 +10,7 @@ use chumsky::{
 };
 
 use crate::syntax::{
-    ClassMember, Expr, Literal, Pattern, Statement, SyntaxTree, Type, TypeConstructor,
+    ClassMember, Expr, Identifier, Literal, Pattern, Statement, SyntaxTree, Type, TypeConstructor,
 };
 
 /// Adapter to make `chumsky`'s parser errors usable as standard Rust errors.
@@ -50,6 +50,9 @@ struct OperatorDef {
     /// The associativity; if this is Left, then a X b X c is (a X b) X c; for Right, it is a X (b X
     /// c); for None, it is a syntax error.
     assoc: Option<Associativity>,
+
+    /// Function call that the binary operator gets translated to.
+    translation: String,
 }
 
 /// The possible associativity directions of an operator.
@@ -70,11 +73,13 @@ impl Default for ParserMeta {
                     name: "^".to_string(),
                     precedence: 8,
                     assoc: Some(Right),
+                    translation: "pow".to_string(),
                 },
                 OperatorDef {
                     name: "*".to_string(),
                     precedence: 7,
                     assoc: Some(Left),
+                    translation: "mul".to_string(),
                 },
                 OperatorDef {
                     // Division, which always returns an exact result and does not round to an
@@ -82,131 +87,146 @@ impl Default for ParserMeta {
                     name: "/".to_string(),
                     precedence: 7,
                     assoc: Some(Left),
+                    translation: "div".to_string(),
                 },
                 OperatorDef {
                     // Modulo, defined as Euclidean remainder.
                     name: "%".to_string(),
                     precedence: 7,
                     assoc: Some(Left),
+                    translation: "mod".to_string(),
                 },
                 OperatorDef {
                     name: "+".to_string(),
                     precedence: 6,
                     assoc: Some(Left),
+                    translation: "plus".to_string(),
                 },
                 OperatorDef {
                     name: "-".to_string(),
                     precedence: 6,
                     assoc: Some(Left),
-                },
-                OperatorDef {
-                    // Append to head of list. This might get removed since it's inefficient,
-                    // depending.
-                    name: "::".to_string(),
-                    precedence: 5,
-                    assoc: Some(Right),
+                    translation: "minus".to_string(),
                 },
                 OperatorDef {
                     // Append lists.
                     name: "++".to_string(),
                     precedence: 5,
                     assoc: Some(Right),
+                    translation: "append".to_string(),
                 },
                 OperatorDef {
                     name: "==".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "equal".to_string(),
                 },
                 OperatorDef {
                     name: "!=".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "notEqual".to_string(),
                 },
                 OperatorDef {
                     name: "<".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "lessThan".to_string(),
                 },
                 OperatorDef {
                     name: "<=".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "lessThanEq".to_string(),
                 },
                 OperatorDef {
                     name: ">".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "greaterThan".to_string(),
                 },
                 OperatorDef {
                     name: ">=".to_string(),
                     precedence: 4,
                     assoc: None,
+                    translation: "greaterThanEq".to_string(),
                 },
                 OperatorDef {
                     // Functor map.
                     name: "<$>".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "fmap".to_string(),
                 },
                 OperatorDef {
                     // Functor map to constant.
                     name: "<$".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "fmapConst".to_string(),
                 },
                 OperatorDef {
                     // Flipped `<$`.
                     name: "$>".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "fmapConstFlip".to_string(),
                 },
                 OperatorDef {
                     // Sequential application of applicative actions.
                     name: "<*>".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "seqApp".to_string(),
                 },
                 OperatorDef {
                     // Sequence applicative actions, discarding the left value.
                     name: "*>".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "seqAppRight".to_string(),
                 },
                 OperatorDef {
                     // Sequence applicative actions, discarding the right value.
                     name: "<*".to_string(),
                     precedence: 4,
                     assoc: Some(Left),
+                    translation: "seqAppLeft".to_string(),
                 },
                 OperatorDef {
                     // Binary and boolean `and`.
                     name: "&".to_string(),
                     precedence: 3,
                     assoc: Some(Right),
+                    translation: "and".to_string(),
                 },
                 OperatorDef {
                     // Binary and boolean `or`.
                     name: "|".to_string(),
                     precedence: 2,
                     assoc: Some(Right),
+                    translation: "or".to_string(),
                 },
                 OperatorDef {
                     // Monad sequence.
                     name: ">>".to_string(),
                     precedence: 1,
                     assoc: Some(Left),
+                    translation: "monadSeq".to_string(),
                 },
                 OperatorDef {
                     // Monad bind.
                     name: ">>=".to_string(),
                     precedence: 1,
                     assoc: Some(Left),
+                    translation: "monadBind".to_string(),
                 },
                 OperatorDef {
                     // Function application.
                     name: "$".to_string(),
                     precedence: 1,
                     assoc: Some(Left),
+                    translation: "apply".to_string(),
                 },
             ],
         }
@@ -272,7 +292,7 @@ fn parse_instance_def<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     pad(keyword("instance"))
-        .ignore_then(pad(ident()))
+        .ignore_then(parse_identifier(m))
         .then(parse_type(m))
         .then(
             parse_class_member(m)
@@ -302,7 +322,7 @@ fn parse_func_decl<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, ClassMember, Error = Simple<char>> + 'a {
     pad(keyword("def"))
-        .ignore_then(pad(ident()))
+        .ignore_then(parse_identifier(m))
         .then(parse_pattern(m).repeated())
         .then(pad(just('=')).ignore_then(parse_expression(m)).or_not())
         .then_ignore(pad(just(';')))
@@ -325,7 +345,7 @@ fn parse_class_def<'a>(
     m: &'a ParserMeta,
 ) -> impl Parser<char, Statement, Error = Simple<char>> + 'a {
     pad(keyword("class"))
-        .ignore_then(pad(ident()))
+        .ignore_then(parse_identifier(m))
         .then(pad(ident()))
         .then(
             parse_class_member(m)
@@ -382,6 +402,7 @@ fn parse_unary(
             ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
                 kind: op.to_string(),
                 val: Box::new(exp),
+                translation: "negate".to_string(),
             })
         })
 }
@@ -395,7 +416,7 @@ fn parse_binary<'a>(
     let op_parsers = op_defs.map(|def| {
         pad(just(def.name.to_string()))
             .ignore_then(base.clone())
-            .map(|e| (&def.name, &def.assoc, e))
+            .map(|e| (&def.name, &def.assoc, &def.translation, e))
     });
 
     let zero = one_of([]).map(|_| unreachable!()).boxed();
@@ -403,7 +424,7 @@ fn parse_binary<'a>(
     let ops = any_op.repeated();
 
     base.then(ops).map(|(first, others)| {
-        let mut assocs = others.iter().map(|(_, assoc, _)| assoc);
+        let mut assocs = others.iter().map(|(_, assoc, _, _)| assoc);
         let first_assoc = assocs.next();
         if !first_assoc.map_or(true, |first| assocs.all(|a| a == first)) {
             // TODO: Crash the parser properly here, with error recovery etc.
@@ -420,10 +441,13 @@ fn parse_binary<'a>(
             None | Some(Associativity::Left) => {
                 others
                     .into_iter()
-                    .fold(first, |left, (op_name, _assoc, right)| Expr::BinaryOp {
-                        kind: op_name.to_owned(),
-                        left: Box::new(left),
-                        right: Box::new(right),
+                    .fold(first, |left, (op_name, _assoc, translation, right)| {
+                        Expr::BinaryOp {
+                            kind: op_name.to_owned(),
+                            left: Box::new(left),
+                            right: Box::new(right),
+                            translation: translation.to_string(),
+                        }
                     })
             }
             Some(Associativity::Right) => {
@@ -443,23 +467,32 @@ fn parse_binary<'a>(
                 //      .    last
                 //   others_l
                 let others_l = std::iter::once(&first)
-                    .chain(others.iter().map(|(_name, _assoc, expr)| expr))
-                    .zip(others.iter().map(|(name, _assoc, _expr)| name))
+                    .chain(
+                        others
+                            .iter()
+                            .map(|(_name, _assoc, _translation, expr)| expr),
+                    )
+                    .zip(
+                        others
+                            .iter()
+                            .map(|(name, _assoc, trans, _expr)| (name, trans)),
+                    )
                     .collect::<Vec<_>>();
                 let last = others
                     .iter()
                     .last()
-                    .map(|(_name, _assoc, expr)| expr)
+                    .map(|(_name, _assoc, _translation, expr)| expr)
                     .unwrap_or(&first);
 
                 // And then we can fold as with left-associative operators.
                 others_l
                     .into_iter()
                     .rev()
-                    .fold(last.to_owned(), |r, (l, op)| Expr::BinaryOp {
+                    .fold(last.to_owned(), |r, (l, (op, trans))| Expr::BinaryOp {
                         kind: op.to_string(),
                         left: Box::new(l.to_owned()),
                         right: Box::new(r),
+                        translation: trans.to_string(),
                     })
             }
         }
@@ -546,8 +579,7 @@ fn parse_subscript_expr(
                 pad(just('.'))
                     .ignore_then(base)
                     .map(|e| (SubscriptKind::Dot, e)),
-                rec
-                    .delimited_by(pad(just('[')), pad(just(']')))
+                rec.delimited_by(pad(just('[')), pad(just(']')))
                     .map(|e| (SubscriptKind::Bracket, e)),
             ))
             .repeated(),
@@ -581,11 +613,8 @@ fn parse_tuple_expr(
         })
 }
 
-fn parse_var_ref_expr(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    pad(ident())
-        .separated_by(pad(just("::")))
-        .at_least(1)
-        .map(Expr::VariableReference)
+fn parse_var_ref_expr(m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
+    parse_identifier(m).map(Expr::VariableReference)
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
@@ -633,6 +662,15 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
     pad(choice((int, float, string))).map(Expr::Literal)
 }
 
+fn parse_identifier(
+    _m: &ParserMeta,
+) -> impl Parser<char, Identifier, Error = Simple<char>> + Clone {
+    pad(ident())
+        .separated_by(pad(just("::")))
+        .at_least(1)
+        .map(|elems| Identifier { elems })
+}
+
 fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
     recursive(|rec| {
         choice((
@@ -654,8 +692,8 @@ fn parse_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
     })
 }
 
-fn parse_named_type(_m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
-    pad(ident()).map(Type::Named)
+fn parse_named_type(m: &ParserMeta) -> impl Parser<char, Type, Error = Simple<char>> {
+    parse_identifier(m).map(Type::Named)
 }
 
 fn parse_tuple_type(
@@ -858,6 +896,13 @@ mod tests {
                  def x = 1 ^ 2 * 3 + 4 ++ 5 == 6 & 7 | 8 >> 9;
                  def x = 1 >> 2 | 3 & 4 == 5 ++ 6 + 7 * 8 ^ 9;"
             )
+            .is_ok())
+    }
+
+    #[test]
+    fn multi_char_binary() {
+        assert!(parser(&ParserMeta::default())
+            .parse("def x = 2 >= 3;")
             .is_ok())
     }
 
