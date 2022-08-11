@@ -1,8 +1,8 @@
-//! Syntax tree for AlexScript code.
+//! Syntax tree for Drim code.
 
 use num_bigint::BigUint;
 
-/// A concrete syntax tree. This represents the full content of an AlexScript program, including all
+/// A concrete syntax tree. This represents the full content of a Drim program, including all
 /// whitespace, comments, and tokens: the source code of the original program can be recovered
 /// completely using the syntax tree.
 #[derive(Clone, Debug)]

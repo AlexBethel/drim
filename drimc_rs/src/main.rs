@@ -1,8 +1,8 @@
-//! AlexScript CLI.
+//! Drim compiler CLI.
 
 use std::{error::Error, fmt::Display, fs::File, io::Write, process::exit, str::FromStr};
 
-use axc::{
+use drimc_rs::{
     ast2ir::ast2ir,
     backends,
     parser::{parser, ParserError, ParserMeta},
@@ -225,7 +225,7 @@ impl FromStr for Target {
     }
 }
 
-/// The AlexScript compiler.
+/// The Drim compiler.
 #[derive(Parser, Debug)]
 #[clap(version = "0.1.0")]
 struct Args {
@@ -286,7 +286,7 @@ fn main() {
     match main_e() {
         Ok(()) => (),
         Err(e) => {
-            eprintln!("axc fatal error: {}", e);
+            eprintln!("drimc-rs fatal error: {}", e);
             exit(1);
         }
     }

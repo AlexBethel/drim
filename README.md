@@ -7,23 +7,19 @@ is formatted correctly! ~~abb
 
 -->
 
-# AlexScript
+# Drim
 
-AlexScript is a programming language designed to have the very
-high-level ergonomics and provable correctness of a purely functional
-language, while maintaining speed using strictly-controlled,
-deterministic memory management. The language is capable of compiling
-to C (and possibly other languages in the future), allowing for
-maximum portability without having to write a new backend for the
-compiler for every possible target; also, the compiler and tooling
-will eventually be rewritten in AlexScript to allow for maximum
-portability.
+Drim is a programming language designed to have the very high-level
+ergonomics and provable correctness of a purely functional language,
+while maintaining speed using strictly-controlled, deterministic
+memory management. The language is capable of compiling to C (and
+possibly other languages in the future), allowing for maximum
+portability without having to write a new backend for the compiler for
+every possible target; also, the compiler and tooling will eventually
+be rewritten in Drim to allow for maximum portability.
 
 Syntactically, the language primarily resembles a mixture between
 standard ML and Rust; the language always ignores whitespace.
-
-AlexScript is a misnomer; the language is not actually a scripting
-language and will probably be renamed in the near future.
 
 ## Example
 
@@ -55,33 +51,32 @@ Note that type annotations are always optional; here they're given for
 ## Tools
 
 This repository contains the following tools:
-- `axc-rs`, the Stage-1 AlexScript compiler, written in Rust. This can
-  be used as a binary with a fairly standard compiler CLI, or as a
+- `drimc-rs`, the Stage-1 Drim compiler, written in Rust. This can be
+  used as a binary with a fairly standard compiler CLI, or as a
   library for use in other Rust programs.
 
 The following tools do not exist yet, but are planned:
-- `axc`, the main AlexScript compiler written in AlexScript. This
-  program supports a superset of the behavior of `axc-rs`, and exposes
-  a library that can be used by other AlexScript programs in addition
-  to a the compiler CLI.
-- `axci`, the interactive AlexScript interpreter, a wrapper around
-  `axc`.
-- `axcd`, the Language Server Protocol (LSP) server for AlexScript
-  code support in editors, supporting definition peeking and lookup,
+- `drimc`, the main Drim compiler written in Drim. This program
+  supports a superset of the behavior of `drimc-rs`, and exposes a
+  library that can be used by other Drim programs in addition to a the
+  compiler CLI.
+- `drim`, the interactive Drim interpreter, a wrapper around `drimc`.
+- `drimd`, the Language Server Protocol (LSP) server for Drim code
+  support in editors, supporting definition peeking and lookup,
   renaming variables and modules, etc.
-- `axfmt`, the standard formatter for AlexScript code; all AlexScript
-  code used in this repository must be formatted with `axfmt`, and its
-  use is recommended for other projects.
-- `axdoc`, the documentation generator.
-- `alexscript-mode`, an Emacs mode for editing AlexScript code,
-  supporting syntax highlighting, automatic indentation, some basic
-  keybindings for common tasks, Emacs-side LSP integration for
-  communicating with `acxd`, and a collection of `yasnippet` snippets
-  for inserting common AlexScript constructs.
-- `alexscript-vsc`, Visual Studio Code plugins and tools for editing
+- `drimfmt`, the standard formatter for Drim code; all Drim code used
+  in this repository must be formatted with `drimfmt`, and its use is
+  recommended for other projects.
+- `drimdoc`, the documentation generator.
+- `drim-mode`, an Emacs mode for editing Drim code, supporting syntax
+  highlighting, automatic indentation, some basic keybindings for
+  common tasks, Emacs-side LSP integration for communicating with
+  `drimd`, and a collection of `yasnippet` snippets for inserting
+  common Drim constructs.
+- `drim-vsc`, Visual Studio Code plugins and tools for editing
   AlexScript code.
-- `alexscript-vim`, tools and configuration files for optimizing Vim
-  and Neovim for editing AlexScript code.
+- `drim-vim`, tools and configuration files for optimizing Vim
+  and Neovim for editing Drim code.
 
 ## Language features
 
@@ -130,7 +125,7 @@ Some features the language will most likely have:
 
 ## Compilation
 
-When invoked with no flags, AlexScript by default compiles source code
+When invoked with no flags, Drim by default compiles source code
 directly to code that is valid C and C++, then calls the system C
 compiler to generate an object file, then calls the system linker to
 generate an executable file.

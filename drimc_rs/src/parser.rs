@@ -1,4 +1,4 @@
-//! AlexScript parser.
+//! Drim parser.
 
 use std::{error::Error, fmt::Display};
 
@@ -28,7 +28,7 @@ impl Display for ParserError {
 
 impl Error for ParserError {}
 
-/// Information required to be able to parse AlexScript code, beyond the code itself.
+/// Information required to be able to parse Drim code, beyond the code itself.
 pub struct ParserMeta {
     // This struct is just a total hacky workaround for the fact that chumsky isn't capable of
     // parsing a context-sensitive grammar. I don't intend on ever fixing this: the stage-1 compiler
@@ -233,7 +233,7 @@ impl Default for ParserMeta {
     }
 }
 
-/// The list of reserved words that cannot be used as identifiers in AlexScript.
+/// The list of reserved words that cannot be used as identifiers in Drim.
 #[rustfmt::skip]                // keep this on separate lines for sorting
 pub const RESERVED: &[&str] = &[
     "_",
@@ -248,7 +248,7 @@ pub const RESERVED: &[&str] = &[
     "type",
 ];
 
-/// Parser for AlexScript code.
+/// Parser for Drim code.
 pub fn parser<'a>(m: &'a ParserMeta) -> impl Parser<char, SyntaxTree, Error = Simple<char>> + 'a {
     whitespace_cmt().ignore_then(
         parse_statement(m)
