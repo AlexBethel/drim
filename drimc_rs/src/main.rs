@@ -2,13 +2,13 @@
 
 use std::{error::Error, fmt::Display, fs::File, io::Write, process::exit, str::FromStr};
 
+use clap::Parser;
 use drimc_rs::{
     ast2ir::ast2ir,
     backends,
     parser::{parser, ParserError, ParserMeta},
     typeck::typeck,
 };
-use clap::Parser;
 
 /// Optimization levels.
 #[derive(Debug)]
@@ -256,7 +256,7 @@ fn main() {
         let source = std::fs::read_to_string(&args.source_file)?;
         let meta = ParserMeta::default();
         let ast = chumsky::Parser::parse(&parser(&meta), source).map_err(ParserError)?;
-        typeck(&ast)?;
+        let ast = typeck(ast)?;
 
         let ir = ast2ir(ast);
 
