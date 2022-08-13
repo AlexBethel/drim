@@ -10,7 +10,8 @@ use chumsky::{
 };
 
 use crate::syntax::{
-    ClassMember, Expr, Identifier, Literal, Pattern, Statement, SyntaxTree, Type, TypeConstructor,
+    ClassMember, Expr, ExprKind, Identifier, Literal, Pattern, Statement, SyntaxTree, Type,
+    TypeConstructor,
 };
 
 /// Adapter to make `chumsky`'s parser errors usable as standard Rust errors.
@@ -330,6 +331,7 @@ fn parse_func_decl<'a>(
             name,
             arguments,
             definition,
+            typ: None,
         })
 }
 
@@ -372,15 +374,15 @@ fn parse_expression<'a>(
         let application = term.repeated().at_least(1).map(|exprs| {
             exprs
                 .into_iter()
-                .reduce(|l, r| Expr::Application {
-                    func: Box::new(l),
-                    argument: Box::new(r),
+                .reduce(|l, r| {
+                    expr(ExprKind::Application {
+                        func: Box::new(l),
+                        argument: Box::new(r),
+                    })
                 })
                 .unwrap()
         });
 
-        // let unary = parse_unary(m, term);
-        // let unary = term;
         let unary = parse_unary(m, application);
 
         let binary = (0..=10).rev().fold(unary.boxed(), |p, precedence| {
@@ -399,10 +401,12 @@ fn parse_unary(
         .repeated()
         .then(base)
         .map(|(ops, exp)| {
-            ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
-                kind: op.to_string(),
-                val: Box::new(exp),
-                translation: "negate".to_string(),
+            ops.into_iter().fold(exp, |exp, op| {
+                expr(ExprKind::UnaryOp {
+                    kind: op.to_string(),
+                    val: Box::new(exp),
+                    translation: "negate".to_string(),
+                })
             })
         })
 }
@@ -442,12 +446,12 @@ fn parse_binary<'a>(
                 others
                     .into_iter()
                     .fold(first, |left, (op_name, _assoc, translation, right)| {
-                        Expr::BinaryOp {
+                        expr(ExprKind::BinaryOp {
                             kind: op_name.to_owned(),
                             left: Box::new(left),
                             right: Box::new(right),
                             translation: translation.to_string(),
-                        }
+                        })
                     })
             }
             Some(Associativity::Right) => {
@@ -488,11 +492,13 @@ fn parse_binary<'a>(
                 others_l
                     .into_iter()
                     .rev()
-                    .fold(last.to_owned(), |r, (l, (op, trans))| Expr::BinaryOp {
-                        kind: op.to_string(),
-                        left: Box::new(l.to_owned()),
-                        right: Box::new(r),
-                        translation: trans.to_string(),
+                    .fold(last.to_owned(), |r, (l, (op, trans))| {
+                        expr(ExprKind::BinaryOp {
+                            kind: op.to_string(),
+                            left: Box::new(l.to_owned()),
+                            right: Box::new(r),
+                            translation: trans.to_string(),
+                        })
                     })
             }
         }
@@ -501,65 +507,71 @@ fn parse_binary<'a>(
 
 fn parse_let_expr(
     m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     pad(keyword("let"))
         .ignore_then(parse_pattern(m))
         .then_ignore(pad(just('=')))
-        .then(base.clone())
+        .then(rec.clone())
         .then_ignore(pad(keyword("in")))
-        .then(base)
-        .map(|((left, right), into)| Expr::Let {
-            left,
-            right: Box::new(right),
-            into: Box::new(into),
+        .then(rec)
+        .map(|((left, right), into)| {
+            expr(ExprKind::Let {
+                left,
+                right: Box::new(right),
+                into: Box::new(into),
+            })
         })
 }
 
 fn parse_match_expr(
     m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     pad(keyword("match"))
-        .ignore_then(base.clone())
+        .ignore_then(rec.clone())
         .then(
             parse_pattern(m)
                 .then_ignore(pad(just("=>")))
-                .then(base)
+                .then(rec)
                 .separated_by(pad(just(",")))
                 .allow_trailing()
                 .delimited_by(pad(just('{')), pad(just('}'))),
         )
-        .map(|(matcher, cases)| Expr::Match {
-            matcher: Box::new(matcher),
-            cases,
+        .map(|(matcher, cases)| {
+            expr(ExprKind::Match {
+                matcher: Box::new(matcher),
+                cases,
+            })
         })
 }
 
 fn parse_record_expr(
     _m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     pad(ident())
         .then_ignore(pad(just(':')))
-        .then(base)
+        .then(rec)
         .separated_by(pad(just(',')))
         .allow_trailing()
         .delimited_by(pad(just('{')), pad(just('}')))
-        .map(Expr::Record)
+        .map(|elems| expr(ExprKind::Record(elems)))
 }
 
 fn parse_lambda_expr(
     m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
     pad(keyword("fn"))
         .ignore_then(parse_pattern(m).repeated())
         .then_ignore(pad(just("->")))
-        .then(base)
-        .map(|(arguments, result)| Expr::Lambda {
-            arguments,
-            result: Box::new(result),
+        .then(rec)
+        .map(|(arguments, result)| {
+            expr(ExprKind::Lambda {
+                arguments,
+                result: Box::new(result),
+            })
         })
 }
 
@@ -585,36 +597,38 @@ fn parse_subscript_expr(
             .repeated(),
         )
         .map(|(l, subscripts): (Expr, Vec<(SubscriptKind, Expr)>)| {
-            subscripts.into_iter().fold(l, |l, (kind, r)| match kind {
-                SubscriptKind::Dot => Expr::DotSubscript {
-                    value: Box::new(l),
-                    subscript: Box::new(r),
-                },
-                SubscriptKind::Bracket => Expr::BracketSubscript {
-                    value: Box::new(l),
-                    subscript: Box::new(r),
-                },
+            subscripts.into_iter().fold(l, |l, (kind, r)| {
+                expr(match kind {
+                    SubscriptKind::Dot => ExprKind::DotSubscript {
+                        value: Box::new(l),
+                        subscript: Box::new(r),
+                    },
+                    SubscriptKind::Bracket => ExprKind::BracketSubscript {
+                        value: Box::new(l),
+                        subscript: Box::new(r),
+                    },
+                })
             })
         })
 }
 
 fn parse_tuple_expr(
     _m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
+    rec: impl Parser<char, Expr, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    base.separated_by(pad(just(',')))
+    rec.separated_by(pad(just(',')))
         .delimited_by(pad(just('(')), pad(just(')')))
         .map(|exprs| {
             if exprs.len() == 1 {
                 exprs.into_iter().next().unwrap()
             } else {
-                Expr::Tuple(exprs)
+                expr(ExprKind::Tuple(exprs))
             }
         })
 }
 
 fn parse_var_ref_expr(m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    parse_identifier(m).map(Expr::VariableReference)
+    parse_identifier(m).map(|r| expr(ExprKind::VariableReference(r)))
 }
 
 fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
@@ -659,7 +673,7 @@ fn parse_literal(_m: &ParserMeta) -> impl Parser<char, Expr, Error = Simple<char
         .map(|(l, r)| (l + "." + &r).parse().unwrap())
         .map(Literal::Float);
 
-    pad(choice((int, float, string))).map(Expr::Literal)
+    pad(choice((int, float, string))).map(|lit| expr(ExprKind::Literal(lit)))
 }
 
 fn parse_identifier(
@@ -797,8 +811,8 @@ fn parse_record_pattern(
 
 fn parse_literal_pattern(m: &ParserMeta) -> impl Parser<char, Pattern, Error = Simple<char>> {
     // TODO: factor out literal parsing so we don't have to do this ugly `unreachable` stuff.
-    parse_literal(m).map(|e| match e {
-        Expr::Literal(lit) => Pattern::Literal(lit),
+    parse_literal(m).map(|e| match e.kind {
+        ExprKind::Literal(lit) => Pattern::Literal(lit),
         _ => unreachable!(),
     })
 }
@@ -827,6 +841,10 @@ fn ident() -> impl Parser<char, String, Error = Simple<char>> + Clone {
             Ok(i)
         }
     })
+}
+
+fn expr(e: ExprKind) -> Expr {
+    Expr { kind: e, typ: None }
 }
 
 #[cfg(test)]
