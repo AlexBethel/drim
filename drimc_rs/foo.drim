@@ -1,6 +1,5 @@
 // AlexScript test
 
-def extern core::intrinsic::negate_u32 : U32 -> U32;
 def extern core::intrinsic::pow_u32 : U32 -> U32 -> U32;
 def extern core::intrinsic::mul_u32 : U32 -> U32 -> U32;
 def extern core::intrinsic::div_u32 : U32 -> U32 -> U32;

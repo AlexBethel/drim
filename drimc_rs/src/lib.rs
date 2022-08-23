@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod backends;
+pub mod ir_untyped;
 pub mod parser;
 pub mod syntax;
 pub mod typeck;
