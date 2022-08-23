@@ -2,8 +2,6 @@
 
 use num_bigint::BigUint;
 
-use crate::typeck;
-
 /// A concrete syntax tree. This represents the full content of a Drim program, including all
 /// whitespace, comments, and tokens: the source code of the original program can be recovered
 /// completely using the syntax tree.
@@ -67,10 +65,6 @@ pub enum ClassMember {
 
         /// The definition of the function.
         definition: Option<Expr>,
-
-        /// The type of the overall function; this is filled in by the typechecker, and is left
-        /// blank by the parser.
-        typ: Option<typeck::Type>,
     },
 
     /// Declaration of a type that is a literal alias for another type.
@@ -93,19 +87,9 @@ pub struct TypeConstructor {
     pub args: Vec<Type>,
 }
 
-/// An expression.
-#[derive(Clone, Debug)]
-pub struct Expr {
-    /// The contents of the expression.
-    pub kind: ExprKind,
-
-    /// An optional type signature, left as `None` by the parser and added by the type checker.
-    pub typ: Option<typeck::Type>,
-}
-
 /// The different kinds of expressions.
 #[derive(Clone, Debug)]
-pub enum ExprKind {
+pub enum Expr {
     /// Unary operators, e.g., `-5`.
     UnaryOp {
         /// The text of the operator.

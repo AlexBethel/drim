@@ -1,11 +1,9 @@
 //! Drim compiler CLI.
 
-use std::{error::Error, fmt::Display, fs::File, io::Write, process::exit, str::FromStr};
+use std::{error::Error, fmt::Display, process::exit, str::FromStr};
 
 use clap::Parser;
 use drimc_rs::{
-    ast2ir::ast2ir,
-    backends,
     parser::{parser, ParserError, ParserMeta},
     typeck::typeck,
 };
@@ -258,27 +256,7 @@ fn main() {
         let ast = chumsky::Parser::parse(&parser(&meta), source).map_err(ParserError)?;
         let ast = typeck(ast)?;
 
-        let ir = ast2ir(ast);
-
-        match args.target {
-            Target::CSource => {
-                let c = backends::c::generate_c(&ir);
-
-                let mut out_file = File::create("out.c")?;
-                write!(out_file, "{}", c)?;
-            }
-            Target::Assembly => todo!(),
-            Target::ObjectFile => todo!(),
-            Target::Executable => todo!(),
-            Target::SharedObject => todo!(),
-            Target::Spirv => todo!(),
-            Target::Wat => todo!(),
-            Target::Wasm => todo!(),
-            Target::Lua => todo!(),
-            Target::Python => todo!(),
-            Target::Go => todo!(),
-            Target::Ada => todo!(),
-        }
+        println!("{ast:?}");
 
         Ok(())
     }
