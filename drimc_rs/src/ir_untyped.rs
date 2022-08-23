@@ -4,9 +4,27 @@
 //! simplifies the complexity of the syntax tree, and is used to perform type inference, at which
 //! point it is translated into typed IR.
 
-use crate::{syntax::Identifier, typeck::Type};
+use crate::{
+    syntax::{self, Identifier, SyntaxTree},
+    typeck::Type,
+};
+
+/// A program represented in untyped IR.
+#[derive(Debug)]
+pub struct Program {
+    /// The list of top-level declarations. Each declaration has a fully-namespaced name, and a list
+    /// of instructions that should return the name's value. E.g., for
+    /// ```
+    /// def x = 5;
+    /// ```
+    /// the name `x` becomes associated with a list of instructions that return the value 5. When
+    /// the program starts up, each one of these top-level functions is immediately called to
+    /// initialize global variables, and then `main` is invoked.
+    defs: Vec<(Identifier, Vec<Instruction>)>,
+}
 
 /// An instruction in untyped IR.
+#[derive(Debug)]
 enum Instruction {
     /// Apply a single-argument function to a value, and store the result in another location.
     Apply {
@@ -116,6 +134,7 @@ enum Instruction {
 }
 
 /// A storage location in untyped IR.
+#[derive(Debug, Clone)]
 enum Location {
     /// A named location. Identifiers can be read from to access globally-defined functions and
     /// constants; but identifiers that are bound to (e.g., the `x` in `let x = 5`) must not be
@@ -124,4 +143,152 @@ enum Location {
 
     /// A compiler-generated temporary location.
     Temporary(u64),
+}
+
+/// Converts a program's abstract syntax tree into untyped IR code.
+pub fn ast_to_untyped_ir(ast: SyntaxTree) -> Program {
+    let mut defs = vec![];
+    for stmt in ast.0.into_iter() {
+        match stmt {
+            syntax::Statement::TypeDefinition {
+                typ: _,
+                constructors: _,
+            } => todo!(),
+            syntax::Statement::InstanceDefinition {
+                class_name: _,
+                typ: _,
+                decls: _,
+            } => todo!(),
+            syntax::Statement::ClassDefinition {
+                name: _,
+                var: _,
+                decls: _,
+            } => todo!(),
+            syntax::Statement::ClassMember(syntax::ClassMember::Function {
+                name,
+                arguments,
+                definition,
+            }) => {
+                todo!();
+            }
+            syntax::Statement::ClassMember(syntax::ClassMember::TypeAlias {
+                left: _,
+                right: _,
+            }) => {
+                todo!()
+            }
+        }
+    }
+
+    Program { defs }
+}
+
+/// Generates a new temporary location name that's guaranteed to be unique.
+fn temporary(counter: &mut u64) -> Location {
+    let n = *counter;
+    *counter += 1;
+    Location::Temporary(n)
+}
+
+/// Converts a function definition into a list of instructions.
+fn convert_fn(
+    counter: &mut u64,
+    mut arguments: Vec<syntax::Pattern>,
+    definition: syntax::Expr,
+) -> Vec<Instruction> {
+    if arguments.len() > 1 {
+        let first = arguments.remove(0);
+
+        let lambda_loc = temporary(counter);
+        let arg_loc = temporary(counter);
+        vec![
+            Instruction::DefLambda {
+                target: lambda_loc,
+                param: arg_loc,
+                body: todo!(),
+            },
+            Instruction::Return { target: lambda_loc },
+        ]
+    } else {
+        todo!()
+    }
+}
+
+/// Emits instructions that bind the given pattern to the variable stored in location `l`.
+fn bind_pattern(counter: &mut u64, p: syntax::Pattern, l: &Location) -> Vec<Instruction> {
+    match p {
+        syntax::Pattern::Capture(name) => {
+            vec![Instruction::Collect {
+                target: Location::Named(syntax::Identifier { elems: vec![name] }),
+                source: vec![l.to_owned()],
+            }]
+        }
+        syntax::Pattern::Tuple(pats) => {
+            let pat_locs: Vec<_> = pats.iter().map(|_| temporary(counter)).collect();
+            std::iter::once(Instruction::DestructureTuple {
+                source: l.to_owned(),
+                targets: pat_locs.clone(),
+            })
+            .chain(
+                Iterator::zip(pats.into_iter(), pat_locs)
+                    .map(|(pat, pat_loc)| bind_pattern(counter, pat, &pat_loc))
+                    .flatten(),
+            )
+            .collect()
+        }
+        syntax::Pattern::Record {
+            members,
+            inexhaustive,
+        } => todo!(),
+        syntax::Pattern::TypeAnnotated { pat, typ } => std::iter::once(Instruction::FixType {
+            target: l.to_owned(),
+            // typ: *typ,
+            typ: todo!(),
+        })
+        .chain(bind_pattern(counter, *pat, l))
+        .collect(),
+        syntax::Pattern::Destructure(_, _) => todo!(),
+        syntax::Pattern::Ignore => Vec::new(),
+        syntax::Pattern::Literal(_) => Vec::new(),
+    }
+}
+
+/// Emits intructions that evaluate the expression `e`, then place the result in location `l`.
+fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instruction> {
+    match e {
+        syntax::Expr::UnaryOp {
+            kind,
+            val,
+            translation,
+        } => todo!(),
+        syntax::Expr::BinaryOp {
+            kind,
+            left,
+            right,
+            translation,
+        } => todo!(),
+        syntax::Expr::Application { func, argument } => {
+            let func_e = temporary(counter);
+            let arg_e = temporary(counter);
+            Iterator::chain(
+                eval_expr(counter, *func, &func_e).into_iter(),
+                eval_expr(counter, *argument, &arg_e).into_iter(),
+            )
+            .chain(vec![Instruction::Apply {
+                target: l.to_owned(),
+                func: func_e,
+                argument: arg_e,
+            }])
+            .collect()
+        }
+        syntax::Expr::Let { left, right, into } => todo!(),
+        syntax::Expr::Match { matcher, cases } => todo!(),
+        syntax::Expr::Record(_) => todo!(),
+        syntax::Expr::Lambda { arguments, result } => todo!(),
+        syntax::Expr::DotSubscript { value, subscript } => todo!(),
+        syntax::Expr::BracketSubscript { value, subscript } => todo!(),
+        syntax::Expr::Tuple(_) => todo!(),
+        syntax::Expr::VariableReference(_) => todo!(),
+        syntax::Expr::Literal(_) => todo!(),
+    }
 }
