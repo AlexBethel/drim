@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display, process::exit, str::FromStr};
 use clap::Parser;
 use drimc_rs::{
     parser::{parser, ParserError, ParserMeta},
-    typeck::typeck,
+    typeck::typeck, ir_untyped::ast_to_untyped_ir,
 };
 
 /// Optimization levels.
@@ -254,9 +254,9 @@ fn main() {
         let source = std::fs::read_to_string(&args.source_file)?;
         let meta = ParserMeta::default();
         let ast = chumsky::Parser::parse(&parser(&meta), source).map_err(ParserError)?;
-        let ast = typeck(ast)?;
+        let untyped_ir = ast_to_untyped_ir(ast);
 
-        println!("{ast:?}");
+        println!("{untyped_ir:#?}");
 
         Ok(())
     }

@@ -1,0 +1,3 @@
+// IR Test
+
+def nul (a, b) = ();

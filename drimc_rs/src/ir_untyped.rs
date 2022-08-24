@@ -148,6 +148,7 @@ enum Location {
 /// Converts a program's abstract syntax tree into untyped IR code.
 pub fn ast_to_untyped_ir(ast: SyntaxTree) -> Program {
     let mut defs = vec![];
+    let mut counter = 0;
     for stmt in ast.0.into_iter() {
         match stmt {
             syntax::Statement::TypeDefinition {
@@ -169,7 +170,14 @@ pub fn ast_to_untyped_ir(ast: SyntaxTree) -> Program {
                 arguments,
                 definition,
             }) => {
-                todo!();
+                defs.push((
+                    name,
+                    convert_fn(
+                        &mut counter,
+                        arguments,
+                        definition.expect("Empty functions unimplemented"),
+                    ),
+                ));
             }
             syntax::Statement::ClassMember(syntax::ClassMember::TypeAlias {
                 left: _,
@@ -203,14 +211,21 @@ fn convert_fn(
         let arg_loc = temporary(counter);
         vec![
             Instruction::DefLambda {
-                target: lambda_loc,
-                param: arg_loc,
-                body: todo!(),
+                target: lambda_loc.clone(),
+                param: arg_loc.clone(),
+                body: bind_pattern(counter, first, &arg_loc)
+                    .into_iter()
+                    .chain(convert_fn(counter, arguments, definition))
+                    .collect(),
             },
             Instruction::Return { target: lambda_loc },
         ]
     } else {
-        todo!()
+        let ret_loc = temporary(counter);
+        eval_expr(counter, definition, &ret_loc)
+            .into_iter()
+            .chain(std::iter::once(Instruction::Return { target: ret_loc }))
+            .collect()
     }
 }
 
@@ -287,7 +302,19 @@ fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instructio
         syntax::Expr::Lambda { arguments, result } => todo!(),
         syntax::Expr::DotSubscript { value, subscript } => todo!(),
         syntax::Expr::BracketSubscript { value, subscript } => todo!(),
-        syntax::Expr::Tuple(_) => todo!(),
+        syntax::Expr::Tuple(elems) => {
+            let elem_locs: Vec<_> = elems.iter().map(|_| temporary(counter)).collect();
+            elems
+                .into_iter()
+                .zip(elem_locs.iter())
+                .map(|(elem, elem_loc)| eval_expr(counter, elem, elem_loc))
+                .flatten()
+                .chain(std::iter::once(Instruction::Collect {
+                    target: l.to_owned(),
+                    source: elem_locs.clone(),
+                }))
+                .collect()
+        }
         syntax::Expr::VariableReference(_) => todo!(),
         syntax::Expr::Literal(_) => todo!(),
     }
