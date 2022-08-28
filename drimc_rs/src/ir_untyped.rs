@@ -25,6 +25,18 @@ pub struct Program {
     defs: Vec<(Identifier, Vec<Instruction>)>,
 }
 
+impl Display for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for def in self.defs.iter() {
+            writeln!(f, "PR {}", def.0)?;
+            for inst in def.1.iter() {
+                writeln!(f, "{}", inst)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// An instruction in untyped IR.
 #[derive(Debug)]
 enum Instruction {
@@ -133,6 +145,81 @@ enum Instruction {
         /// The type that the storage location should have.
         typ: Type,
     },
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instruction::Apply {
+                target,
+                func,
+                argument,
+            } => write!(f, "AP {target} <- {func} {argument}"),
+            Instruction::Collect { target, source } => {
+                write!(f, "CL {target} <- ")?;
+                for s in source {
+                    write!(f, "{s},")?;
+                }
+                Ok(())
+            }
+            Instruction::Branch {
+                target,
+                constructor,
+                iftrue,
+                iffalse,
+            } => {
+                writeln!(f, "IF {constructor} = {target} THEN [")?;
+                for inst in iftrue {
+                    writeln!(f, "{inst}")?;
+                }
+                writeln!(f, "] ELSE [")?;
+                for inst in iffalse {
+                    writeln!(f, "{inst}")?;
+                }
+                write!(f, "] ENDIF")?;
+                Ok(())
+            }
+            Instruction::DestructureData {
+                source,
+                constructor,
+                targets,
+            } => {
+                write!(f, "DS {constructor} (")?;
+                for target in targets {
+                    write!(f, "{target},")?;
+                }
+                write!(f, ") << {source}")?;
+                Ok(())
+            }
+            Instruction::DestructureTuple { source, targets } => {
+                write!(f, "DT (")?;
+                for target in targets {
+                    write!(f, "{target},")?;
+                }
+                write!(f, ") <- {source}")?;
+                Ok(())
+            }
+            Instruction::DefLambda {
+                target,
+                param,
+                body,
+            } => {
+                writeln!(f, "DL {target} <- \\{param} [")?;
+                for inst in body {
+                    writeln!(f, "{}", inst)?;
+                }
+                write!(f, "]")?;
+                Ok(())
+            },
+            Instruction::Return { target } => {
+                write!(f, "RT {target}")
+            },
+            Instruction::Unreachable => {
+                write!(f, "UN")
+            },
+            Instruction::FixType { target, typ } => todo!(),
+        }
+    }
 }
 
 /// A storage location in untyped IR.
@@ -287,11 +374,23 @@ fn bind_pattern(counter: &mut u64, p: syntax::Pattern, l: &Location) -> Vec<Inst
 fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instruction> {
     match e {
         syntax::Expr::BinaryOp {
-            kind,
+            kind: _,
             left,
             right,
             translation,
-        } => todo!(),
+        } => eval_expr(
+            counter,
+            syntax::Expr::Application {
+                func: Box::new(syntax::Expr::Application {
+                    func: Box::new(syntax::Expr::VariableReference(Identifier {
+                        elems: vec![translation],
+                    })),
+                    argument: left,
+                }),
+                argument: right,
+            },
+            l,
+        ),
         syntax::Expr::Application { func, argument } => {
             let func_e = temporary(counter);
             let arg_e = temporary(counter);

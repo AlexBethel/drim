@@ -263,7 +263,7 @@ fn main() {
         let ast = chumsky::Parser::parse(&parser(&meta), source).map_err(ParserError)?;
         let untyped_ir = ast_to_untyped_ir(ast);
 
-        println!("{untyped_ir:#?}");
+        println!("{untyped_ir}");
 
         Ok(())
     }
