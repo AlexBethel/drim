@@ -379,30 +379,12 @@ fn parse_expression<'a>(
                 .unwrap()
         });
 
-        let unary = parse_unary(m, application);
-
-        let binary = (0..=10).rev().fold(unary.boxed(), |p, precedence| {
+        let binary = (0..=10).rev().fold(application.boxed(), |p, precedence| {
             parse_binary(m, precedence, p).boxed()
         });
 
         binary
     })
-}
-
-fn parse_unary(
-    _m: &ParserMeta,
-    base: impl Parser<char, Expr, Error = Simple<char>> + Clone,
-) -> impl Parser<char, Expr, Error = Simple<char>> + Clone {
-    pad(just("-").to("-"))
-        .repeated()
-        .then(base)
-        .map(|(ops, exp)| {
-            ops.into_iter().fold(exp, |exp, op| Expr::UnaryOp {
-                kind: op.to_string(),
-                val: Box::new(exp),
-                translation: "negate".to_string(),
-            })
-        })
 }
 
 fn parse_binary<'a>(

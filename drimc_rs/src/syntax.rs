@@ -1,5 +1,7 @@
 //! Syntax tree for Drim code.
 
+use std::fmt::Display;
+
 use num_bigint::BigUint;
 
 /// A concrete syntax tree. This represents the full content of a Drim program, including all
@@ -90,18 +92,6 @@ pub struct TypeConstructor {
 /// The different kinds of expressions.
 #[derive(Clone, Debug)]
 pub enum Expr {
-    /// Unary operators, e.g., `-5`.
-    UnaryOp {
-        /// The text of the operator.
-        kind: String,
-
-        /// The value being operated upon.
-        val: Box<Expr>,
-
-        /// The function that the unary operator translates to.
-        translation: String,
-    },
-
     /// Binary operators, e.g., `5 + 5`.
     BinaryOp {
         /// The text of the operator.
@@ -258,6 +248,18 @@ pub struct Identifier {
     pub elems: Vec<String>,
 }
 
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (n, e) in self.elems.iter().enumerate() {
+            if n != 0 {
+                write!(f, "::")?;
+            }
+            write!(f, "{}", e)?;
+        }
+        Ok(())
+    }
+}
+
 /// Literal values included in source code.
 #[derive(Clone, Debug)]
 pub enum Literal {
@@ -269,4 +271,14 @@ pub enum Literal {
 
     /// `123.456`
     Float(f64),
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::String(s) => write!(f, "{}", s),
+            Literal::Integer(i) => write!(f, "{}", i),
+            Literal::Float(fl) => write!(f, "{}", fl),
+        }
+    }
 }

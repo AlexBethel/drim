@@ -4,8 +4,8 @@ use std::{error::Error, fmt::Display, process::exit, str::FromStr};
 
 use clap::Parser;
 use drimc_rs::{
+    ir_untyped::ast_to_untyped_ir,
     parser::{parser, ParserError, ParserMeta},
-    typeck::typeck, ir_untyped::ast_to_untyped_ir,
 };
 
 /// Optimization levels.
@@ -98,6 +98,10 @@ impl FromStr for Optimization {
 /// Targets for compiling to.
 #[derive(Debug)]
 enum Target {
+    // -------------------- IR generation --------------------
+    /// Generate untyped intermediate representation (UIR) code.
+    UIR,
+
     // -------------------- C generation --------------------
 
     // Highest priority codegen, since it allows us to compile to the vast majority of possible
@@ -138,25 +142,26 @@ enum Target {
     Wasm,
 
     // -------------------- Other language generation --------------------
-    /// Directly generate Lua code.
+
     // Medium-priority codegen, since Lua is the only type of code that runs in e.g. plugins and
     // scripts in some software, and it is difficult to generate efficient Lua without direct
     // support from the compiler.
+    /// Directly generate Lua code.
     Lua,
 
-    /// Directly generate Python code.
     // Low-priority codegen; the same situation as Lua, but situations that require Python code with
     // no alternatives are much less common than situations that require Lua code with no
     // alternatives.
+    /// Directly generate Python code.
     Python,
 
-    /// Directly generate Go code.
     // Extremely low-priority codegen; almost no valid use cases.
+    /// Directly generate Go code.
     Go,
 
-    /// Directly generate Ada code.
     // Currently zero-priority codegen; no valid use cases whatsoever as far as I (Alex) can
     // determine.
+    /// Directly generate Ada code.
     Ada,
 }
 
@@ -166,6 +171,7 @@ impl Display for Target {
             f,
             "{}",
             match self {
+                Target::UIR => "uir",
                 Target::CSource => "c",
                 Target::Assembly => "asm",
                 Target::ObjectFile => "obj",
@@ -190,6 +196,7 @@ impl FromStr for Target {
         use Target::*;
 
         let targets = [
+            ("uir", "Untyped intermediate representation.", UIR),
             ("c", "C source code.", CSource),
             ("asm", "Assembly code.", Assembly),
             ("obj", "Object file.", ObjectFile),

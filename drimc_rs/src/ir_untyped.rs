@@ -4,8 +4,10 @@
 //! simplifies the complexity of the syntax tree, and is used to perform type inference, at which
 //! point it is translated into typed IR.
 
+use std::fmt::Display;
+
 use crate::{
-    syntax::{self, Identifier, SyntaxTree},
+    syntax::{self, Identifier, Literal, SyntaxTree},
     typeck::Type,
 };
 
@@ -143,6 +145,19 @@ enum Location {
 
     /// A compiler-generated temporary location.
     Temporary(u64),
+
+    /// A constant value.
+    Literal(Literal),
+}
+
+impl Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Location::Named(id) => write!(f, "n`{}`", id),
+            Location::Temporary(t) => write!(f, "t`{}`", t),
+            Location::Literal(l) => write!(f, "c`{}`", l),
+        }
+    }
 }
 
 /// Converts a program's abstract syntax tree into untyped IR code.
@@ -204,7 +219,13 @@ fn convert_fn(
     mut arguments: Vec<syntax::Pattern>,
     definition: syntax::Expr,
 ) -> Vec<Instruction> {
-    if arguments.len() > 1 {
+    if arguments.is_empty() {
+        let ret_loc = temporary(counter);
+        eval_expr(counter, definition, &ret_loc)
+            .into_iter()
+            .chain(std::iter::once(Instruction::Return { target: ret_loc }))
+            .collect()
+    } else {
         let first = arguments.remove(0);
 
         let lambda_loc = temporary(counter);
@@ -220,12 +241,6 @@ fn convert_fn(
             },
             Instruction::Return { target: lambda_loc },
         ]
-    } else {
-        let ret_loc = temporary(counter);
-        eval_expr(counter, definition, &ret_loc)
-            .into_iter()
-            .chain(std::iter::once(Instruction::Return { target: ret_loc }))
-            .collect()
     }
 }
 
@@ -271,11 +286,6 @@ fn bind_pattern(counter: &mut u64, p: syntax::Pattern, l: &Location) -> Vec<Inst
 /// Emits intructions that evaluate the expression `e`, then place the result in location `l`.
 fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instruction> {
     match e {
-        syntax::Expr::UnaryOp {
-            kind,
-            val,
-            translation,
-        } => todo!(),
         syntax::Expr::BinaryOp {
             kind,
             left,
@@ -315,7 +325,13 @@ fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instructio
                 }))
                 .collect()
         }
-        syntax::Expr::VariableReference(_) => todo!(),
-        syntax::Expr::Literal(_) => todo!(),
+        syntax::Expr::VariableReference(name) => vec![Instruction::Collect {
+            target: l.clone(),
+            source: vec![Location::Named(name)],
+        }],
+        syntax::Expr::Literal(lit) => vec![Instruction::Collect {
+            target: l.clone(),
+            source: vec![Location::Literal(lit)],
+        }],
     }
 }
