@@ -83,6 +83,15 @@ enum Instruction {
         iffalse: Vec<Instruction>,
     },
 
+    /// Copy a value from one of a number of locations, whichever is initialized.
+    Phi {
+        /// The location to store the new value in.
+        target: Location,
+
+        /// The source locations; exactly one of these must have been initialized.
+        sources: Vec<Location>,
+    },
+
     /// Destructure an algebraic object into its component pieces.
     DestructureData {
         /// The object we're destructuring.
@@ -179,6 +188,13 @@ impl Display for Instruction {
                 write!(f, "] ENDIF")?;
                 Ok(())
             }
+            Instruction::Phi { target, sources } => {
+                write!(f, "PH {target} ")?;
+                for source in sources {
+                    write!(f, "{source},")?;
+                }
+                Ok(())
+            }
             Instruction::DestructureData {
                 source,
                 constructor,
@@ -210,13 +226,13 @@ impl Display for Instruction {
                 }
                 write!(f, "]")?;
                 Ok(())
-            },
+            }
             Instruction::Return { target } => {
                 write!(f, "RT {target}")
-            },
+            }
             Instruction::Unreachable => {
                 write!(f, "UN")
-            },
+            }
             Instruction::FixType { target, typ } => todo!(),
         }
     }
@@ -370,7 +386,21 @@ fn bind_pattern(counter: &mut u64, p: syntax::Pattern, l: &Location) -> Vec<Inst
     }
 }
 
-/// Emits intructions that evaluate the expression `e`, then place the result in location `l`.
+/// Emits instructions that check whether the expression `e` matches the pattern, and if so,
+/// evaluates `e1` and places the result in `l`; otherwise, evaluates `e2` and places the result in
+/// `l`.
+fn conditional(
+    counter: &mut u64,
+    e: syntax::Expr,
+    p: syntax::Pattern,
+    e1: syntax::Expr,
+    e2: syntax::Expr,
+    l: &Location,
+) -> Vec<Instruction> {
+    todo!()
+}
+
+/// Emits instructions that evaluate the expression `e`, then place the result in location `l`.
 fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instruction> {
     match e {
         syntax::Expr::BinaryOp {
@@ -405,7 +435,17 @@ fn eval_expr(counter: &mut u64, e: syntax::Expr, l: &Location) -> Vec<Instructio
             }])
             .collect()
         }
-        syntax::Expr::Let { left, right, into } => todo!(),
+        syntax::Expr::Let { left, right, into } => {
+            let right_e = temporary(counter);
+            let eval_right = eval_expr(counter, *right, &right_e);
+            let bind_left = bind_pattern(counter, left, &right_e);
+            let eval_into = eval_expr(counter, *into, l);
+            eval_right
+                .into_iter()
+                .chain(bind_left)
+                .chain(eval_into)
+                .collect()
+        }
         syntax::Expr::Match { matcher, cases } => todo!(),
         syntax::Expr::Record(_) => todo!(),
         syntax::Expr::Lambda { arguments, result } => todo!(),
