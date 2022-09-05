@@ -21,6 +21,9 @@ be rewritten in Drim to allow for maximum portability.
 Syntactically, the language primarily resembles a mixture between
 standard ML and Rust; the language always ignores whitespace.
 
+Drim is licensed under the GNU General Public License, version 3 or
+later. See the `LICENSE` file for details.
+
 ## Example
 
 ```
