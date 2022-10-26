@@ -1,5 +1,0 @@
-// IR Test
-
-// def nul (a, b) = sin a;
-
-def add (a, b) = a + b * c;
